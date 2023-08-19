@@ -60,7 +60,12 @@ pub const STACK_MAX: isize = FRAMES_MAX * UINT8_COUNT;
 
 #[derive(Clone)] // Copy too but made explicit
 pub struct CallFrame {
+/* Calls and Functions call-frame < Closures call-frame-closure
     pub function: *mut ObjFunction,
+*/
+//> Closures call-frame-closure
+    pub closure: *mut ObjClosure,
+//< Closures call-frame-closure
     pub ip: *mut u8,
     pub slots: *mut Value,
 }
@@ -89,6 +94,9 @@ pub struct VM {
 //> Hash Tables vm-strings
     pub strings: Table,
 //< Hash Tables vm-strings
+//> Closures open-upvalues-field
+    pub openUpvalues: *mut ObjUpvalue,
+//< Closures open-upvalues-field
 //> Strings objects-root
     pub objects: *mut Obj,
 //< Strings objects-root
@@ -142,6 +150,9 @@ unsafe fn resetStack() {
 //> Calls and Functions reset-frame-count
     unsafe { vm.frameCount = 0 };
 //< Calls and Functions reset-frame-count
+//> Closures init-open-upvalues
+    unsafe { vm.openUpvalues = null_mut() };
+//< Closures init-open-upvalues
 }
 //< reset-stack
 //> Types of Values runtime-error
@@ -163,7 +174,12 @@ unsafe fn runtimeError(mut format: fmt::Arguments<'_>) {
 //> Calls and Functions runtime-error-stack
     for mut i in (0..unsafe { vm.frameCount }).rev() {
         let mut frame: *mut CallFrame = unsafe { &mut vm.frames[i as usize] } as *mut CallFrame;
+/* Calls and Functions runtime-error-stack < Closures runtime-error-function
         let mut function: *mut ObjFunction = unsafe { (*frame).function };
+*/
+//> Closures runtime-error-function
+        let mut function: *mut ObjFunction = unsafe { (*(*frame).closure).function };
+//< Closures runtime-error-function
         let mut instruction: isize = unsafe { (*frame).ip.offset_from(unsafe { (*function).chunk.code }) } - 1;
         eprint!("[line {}] in ", // [minus]
             unsafe { *(*function).chunk.lines.offset(instruction) });
@@ -243,12 +259,24 @@ unsafe fn peek(mut distance: isize) -> Value {
     return unsafe { (*vm.stackTop.offset(-1 - distance)).clone() };
 }
 //< Types of Values peek
-//> Calls and Functions call
+/* Calls and Functions call < Closures call-signature
 unsafe fn call(mut function: *mut ObjFunction, mut argCount: isize) -> bool {
-//> check-arity
+*/
+//> Calls and Functions call
+//> Closures call-signature
+unsafe fn call(mut closure: *mut ObjClosure, mut argCount: isize) -> bool {
+//< Closures call-signature
+/* Calls and Functions check-arity < Closures check-arity
     if argCount != unsafe { (*function).arity } {
         unsafe { runtimeError(format_args!("Expected {} arguments but got {}.",
             unsafe { (*function).arity }, argCount)) };
+*/
+//> Closures check-arity
+    if argCount != unsafe { (*(*closure).function).arity } {
+        unsafe { runtimeError(format_args!("Expected {} arguments but got {}.",
+            unsafe { (*(*closure).function).arity }, argCount)) };
+//< Closures check-arity
+//> check-arity
         return false;
     }
 
@@ -262,8 +290,14 @@ unsafe fn call(mut function: *mut ObjFunction, mut argCount: isize) -> bool {
 //< check-overflow
     let mut frame: *mut CallFrame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize] } as *mut CallFrame;
     unsafe { vm.frameCount += 1 };
+/* Calls and Functions call < Closures call-init-closure
     unsafe { (*frame).function = function };
     unsafe { (*frame).ip = unsafe { (*function).chunk.code } };
+*/
+//> Closures call-init-closure
+    unsafe { (*frame).closure = closure };
+    unsafe { (*frame).ip = unsafe { (*(*closure).function).chunk.code } };
+//< Closures call-init-closure
     unsafe { (*frame).slots = unsafe { vm.stackTop.offset(-argCount - 1) } };
     return true;
 }
@@ -272,8 +306,14 @@ unsafe fn call(mut function: *mut ObjFunction, mut argCount: isize) -> bool {
 unsafe fn callValue(mut callee: Value, mut argCount: isize) -> bool {
     if IS_OBJ!(callee) {
         match unsafe { OBJ_TYPE!(callee.clone()) } {
+//> Closures call-value-closure
+            OBJ_CLOSURE =>
+                return unsafe { call(unsafe { AS_CLOSURE!(callee) }, argCount) },
+//< Closures call-value-closure
+/* Calls and Functions call-value < Closures call-value-closure
             OBJ_FUNCTION => // [switch]
                 return unsafe { call(unsafe { AS_FUNCTION!(callee) }, argCount) },
+*/
 //> call-native
             OBJ_NATIVE => {
                 let mut native: NativeFn = unsafe { AS_NATIVE!(callee) };
@@ -290,6 +330,46 @@ unsafe fn callValue(mut callee: Value, mut argCount: isize) -> bool {
     return false;
 }
 //< Calls and Functions call-value
+//> Closures capture-upvalue
+unsafe fn captureUpvalue(mut local: *mut Value) -> *mut ObjUpvalue {
+//> look-for-existing-upvalue
+    let mut prevUpvalue: *mut ObjUpvalue = null_mut();
+    let mut upvalue: *mut ObjUpvalue = unsafe { vm.openUpvalues };
+    while !upvalue.is_null() && unsafe { (*upvalue).location } > local {
+        prevUpvalue = upvalue;
+        upvalue = unsafe { (*upvalue).next };
+    }
+
+    if !upvalue.is_null() && unsafe { (*upvalue).location } == local {
+        return upvalue;
+    }
+
+//< look-for-existing-upvalue
+    let mut createdUpvalue: *mut ObjUpvalue = unsafe { newUpvalue(local) };
+//> insert-upvalue-in-list
+    unsafe { (*createdUpvalue).next = upvalue };
+
+    if prevUpvalue.is_null() {
+        unsafe { vm.openUpvalues = createdUpvalue };
+    } else {
+        unsafe { (*prevUpvalue).next = createdUpvalue };
+    }
+
+//< insert-upvalue-in-list
+    return createdUpvalue;
+}
+//< Closures capture-upvalue
+//> Closures close-upvalues
+unsafe fn closeUpvalues(mut last: *mut Value) {
+    while !unsafe { vm.openUpvalues }.is_null() &&
+            unsafe { (*vm.openUpvalues).location } >= last {
+        let mut upvalue: *mut ObjUpvalue = unsafe { vm.openUpvalues };
+        unsafe { (*upvalue).closed = unsafe { (*(*upvalue).location).clone() } };
+        unsafe { (*upvalue).location = unsafe { &mut (*upvalue).closed } as *mut Value };
+        unsafe { vm.openUpvalues = unsafe { (*upvalue).next } };
+    }
+}
+//< Closures close-upvalues
 //> Types of Values is-falsey
 fn isFalsey(mut value: Value) -> bool {
     return IS_NIL!(value) || (IS_BOOL!(value) && !unsafe { AS_BOOL!(value) });
@@ -366,11 +446,20 @@ unsafe fn run() -> InterpretResult {
         }};
     }
 
+/* Calls and Functions run < Closures read-constant
     macro_rules! READ_CONSTANT {
         () => {{
             unsafe { (*(*(*frame).function).chunk.constants.values.offset(unsafe { READ_BYTE!() } as isize)).clone() }
         }};
     }
+*/
+//> Closures read-constant
+    macro_rules! READ_CONSTANT {
+        () => {{
+            unsafe { (*(*(*(*frame).closure).function).chunk.constants.values.offset(unsafe { READ_BYTE!() } as isize)).clone() }
+        }};
+    }
+//< Closures read-constant
 
 //< Calls and Functions run
 //> Global Variables read-string
@@ -427,11 +516,16 @@ unsafe fn run() -> InterpretResult {
             let _ = unsafe { disassembleInstruction(unsafe { vm.chunk },
                 unsafe { vm.ip.offset_from(unsafe { (*vm.chunk).code }) }) };
 */
-//> Calls and Functions trace-execution
+/* Calls and Functions trace-execution < Closures disassemble-instruction
             let _ = unsafe { disassembleInstruction(
                 unsafe { &mut (*(*frame).function).chunk } as *mut Chunk,
                 unsafe { (*frame).ip.offset_from(unsafe { (*(*frame).function).chunk.code }) }) };
-//< Calls and Functions trace-execution
+*/
+//> Closures disassemble-instruction
+            let _ = unsafe { disassembleInstruction(
+                unsafe { &mut (*(*(*frame).closure).function).chunk } as *mut Chunk,
+                unsafe { (*frame).ip.offset_from(unsafe { (*(*(*frame).closure).function).chunk.code }) }) };
+//< Closures disassemble-instruction
         }
 
 //< trace-execution
@@ -509,6 +603,18 @@ unsafe fn run() -> InterpretResult {
                 }
             }
 //< Global Variables interpret-set-global
+//> Closures interpret-get-upvalue
+            OP_GET_UPVALUE => {
+                let mut slot: u8 = unsafe { READ_BYTE!() };
+                unsafe { push(unsafe { (*(*(*(*(*frame).closure).upvalues.offset(slot as isize))).location).clone() }) };
+            }
+//< Closures interpret-get-upvalue
+//> Closures interpret-set-upvalue
+            OP_SET_UPVALUE => {
+                let mut slot: u8 = unsafe { READ_BYTE!() };
+                unsafe { *(*(*(*(*frame).closure).upvalues.offset(slot as isize))).location = unsafe { peek(0) } };
+            }
+//< Closures interpret-set-upvalue
 //> Types of Values interpret-equal
             OP_EQUAL => {
                 let mut b: Value = unsafe { pop() };
@@ -616,6 +722,32 @@ unsafe fn run() -> InterpretResult {
 //< update-frame-after-call
             }
 //< Calls and Functions interpret-call
+//> Closures interpret-closure
+            OP_CLOSURE => {
+                let mut function: *mut ObjFunction = unsafe { AS_FUNCTION!(unsafe { READ_CONSTANT!() }) };
+                let mut closure: *mut ObjClosure = unsafe { newClosure(function) };
+                unsafe { push(OBJ_VAL!(closure)) };
+//> interpret-capture-upvalues
+                for mut i in 0..unsafe { (*closure).upvalueCount } {
+                    let mut isLocal: u8 = unsafe { READ_BYTE!() };
+                    let mut index: u8 = unsafe { READ_BYTE!() };
+                    if isLocal == 1 {
+                        unsafe { *(*closure).upvalues.offset(i) = unsafe {
+                            captureUpvalue(unsafe { (*frame).slots.offset(index as isize) }) } };
+                    } else {
+                        unsafe { *(*closure).upvalues.offset(i) = unsafe {
+                            *(*(*frame).closure).upvalues.offset(index as isize) } };
+                    }
+                }
+//< interpret-capture-upvalues
+            }
+//< Closures interpret-closure
+//> Closures interpret-close-upvalue
+            OP_CLOSE_UPVALUE => {
+                unsafe { closeUpvalues(unsafe { vm.stackTop.offset(-1) }) };
+                let _ = unsafe { pop() };
+            }
+//< Closures interpret-close-upvalue
             OP_RETURN => {
 /* A Virtual Machine print-return < Global Variables op-return
                 unsafe { printValue(unsafe { pop() }) };
@@ -629,6 +761,9 @@ unsafe fn run() -> InterpretResult {
 */
 //> Calls and Functions interpret-return
                 let mut result: Value = unsafe { pop() };
+//> Closures return-close-upvalues
+                unsafe { closeUpvalues(unsafe { (*frame).slots }) };
+//< Closures return-close-upvalues
                 unsafe { vm.frameCount -= 1 };
                 if unsafe { vm.frameCount == 0 } {
                     let _ = unsafe { pop() };
@@ -699,9 +834,15 @@ pub unsafe fn interpret(mut source: *const u8) -> InterpretResult {
     unsafe { (*frame).ip = unsafe { (*function).chunk.code } };
     unsafe { (*frame).slots = &mut vm.stack as *mut Value };
 */
-//> Calls and Functions interpret
+/* Calls and Functions interpret < Closures interpret
     let _ = unsafe { call(function, 0) };
-//< Calls and Functions interpret
+*/
+//> Closures interpret
+    let mut closure: *mut ObjClosure = unsafe { newClosure(function) };
+    let _ = unsafe { pop() };
+    unsafe { push(OBJ_VAL!(closure)) };
+    let _ = unsafe { call(closure, 0) };
+//< Closures interpret
 //< Scanning on Demand vm-interpret-c
 //> Compiling Expressions interpret-chunk
 

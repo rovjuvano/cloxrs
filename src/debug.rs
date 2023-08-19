@@ -8,6 +8,9 @@ pub use crate::chunk::*;
 // no need to forward declare disassembleChunk
 // no need to forward declare disassembleInstruction
 //< Chunks of Bytecode debug-h
+//> Closures debug-include-object
+use crate::object::*;
+//< Closures debug-include-object
 //> debug-include-value
 #[allow(unused_imports)]
 use crate::value::*;
@@ -116,6 +119,12 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_SET_GLOBAL =>
             unsafe { constantInstruction("OP_SET_GLOBAL", chunk, offset) },
 //< Global Variables disassemble-set-global
+//> Closures disassemble-upvalue-ops
+        OP_GET_UPVALUE =>
+            unsafe { byteInstruction("OP_GET_UPVALUE", chunk, offset) },
+        OP_SET_UPVALUE =>
+            unsafe { byteInstruction("OP_SET_UPVALUE", chunk, offset) },
+//< Closures disassemble-upvalue-ops
 //> Types of Values disassemble-comparison
         OP_EQUAL =>
             simpleInstruction("OP_EQUAL", offset),
@@ -160,6 +169,35 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_CALL =>
             unsafe { byteInstruction("OP_CALL", chunk, offset) },
 //< Calls and Functions disassemble-call
+//> Closures disassemble-closure
+        OP_CLOSURE => {
+            offset += 1;
+            let mut constant: u8 = unsafe { *(*chunk).code.offset(offset) };
+            offset += 1;
+            print!("{:<16} {:4} ", "OP_CLOSURE", constant);
+            unsafe { printValue(unsafe { (*(*chunk).constants.values.offset(constant as isize)).clone() }) };
+            print!("\n");
+//> disassemble-upvalues
+
+            let mut function: *mut ObjFunction = unsafe { AS_FUNCTION!(unsafe {
+                (*(*chunk).constants.values.offset(constant as isize)).clone() }) };
+            for _ in 0..unsafe { (*function).upvalueCount } {
+                let mut isLocal: isize = unsafe { *(*chunk).code.offset(offset) } as isize;
+                offset += 1;
+                let mut index: isize = unsafe { *(*chunk).code.offset(offset) } as isize;
+                offset += 1;
+                print!("{:04}      |                     {} {}\n",
+                    offset - 2, if isLocal == 1 { "local" } else { "upvalue" }, index);
+            }
+
+//< disassemble-upvalues
+            return offset;
+        }
+//< Closures disassemble-closure
+//> Closures disassemble-close-upvalue
+        OP_CLOSE_UPVALUE =>
+            simpleInstruction("OP_CLOSE_UPVALUE", offset),
+//< Closures disassemble-close-upvalue
         OP_RETURN =>
             simpleInstruction("OP_RETURN", offset),
         #[allow(unreachable_patterns)]

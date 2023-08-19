@@ -118,8 +118,18 @@ struct ParseRule {
 struct Local {
     pub name: Token,
     pub depth: isize,
+//> Closures is-captured-field
+    pub isCaptured: bool,
+//< Closures is-captured-field
 }
 //< Local Variables local-struct
+//> Closures upvalue-struct
+#[derive(Clone)] // Copy too but made explicit
+struct Upvalue {
+    pub index: u8,
+    pub isLocal: bool,
+}
+//< Closures upvalue-struct
 //> Calls and Functions function-type-enum
 #[derive(Clone)] // Copy, Eq, Ord too but made explicit
 #[repr(u8)]
@@ -146,6 +156,9 @@ struct Compiler {
 //< Calls and Functions function-fields
     pub locals: [Local; UINT8_COUNT as usize],
     pub localCount: isize,
+//> Closures upvalues-array
+    pub upvalues: [Upvalue; UINT8_COUNT as usize],
+//< Closures upvalues-array
     pub scopeDepth: isize,
 }
 //< Local Variables compiler-struct
@@ -334,6 +347,9 @@ unsafe fn initCompiler(mut compiler: *mut Compiler, mut r#type: FunctionType) {
     let mut local: *mut Local = unsafe { &mut (*current).locals[unsafe { (*current).localCount } as usize] } as *mut Local;
     unsafe { (*current).localCount += 1 };
     unsafe { (*local).depth = 0 };
+//> Closures init-zero-local-is-captured
+    unsafe { (*local).isCaptured = false };
+//< Closures init-zero-local-is-captured
     unsafe { (*local).name.start = "".as_ptr() };
     unsafe { (*local).name.length = 0 };
 //< Calls and Functions init-function-slot
@@ -387,7 +403,16 @@ unsafe fn endScope() {
     while unsafe { (*current).localCount } > 0 &&
         unsafe { (*current).locals[unsafe { (*current).localCount } as usize - 1].depth } >
             unsafe { (*current).scopeDepth } {
+/* Local Variables pop-locals < Closures end-scope
         unsafe { emitByte(OP_POP as u8) };
+*/
+//> Closures end-scope
+        if unsafe { (*current).locals[unsafe { (*current).localCount } as usize - 1].isCaptured } {
+            unsafe { emitByte(OP_CLOSE_UPVALUE as u8) };
+        } else {
+            unsafe { emitByte(OP_POP as u8) };
+        }
+//< Closures end-scope
         unsafe { (*current).localCount -= 1 };
     }
 //< pop-locals
@@ -433,6 +458,58 @@ unsafe fn resolveLocal(mut compiler: *mut Compiler, mut name: *mut Token) -> isi
     return -1;
 }
 //< Local Variables resolve-local
+//> Closures add-upvalue
+unsafe fn addUpvalue(mut compiler: *mut Compiler, mut index: u8,
+        mut isLocal: bool) -> isize {
+    let mut upvalueCount: isize = unsafe { (*(*compiler).function).upvalueCount };
+//> existing-upvalue
+
+    for mut i in 0..upvalueCount {
+        let mut upvalue: *mut Upvalue = unsafe { &mut (*compiler).upvalues[i as usize] } as *mut Upvalue;
+        if unsafe { (*upvalue).index } == index && unsafe { (*upvalue).isLocal } == isLocal {
+            return i;
+        }
+    }
+
+//< existing-upvalue
+//> too-many-upvalues
+    if upvalueCount == UINT8_COUNT {
+        unsafe { error("Too many closure variables in function.") };
+        return 0;
+    }
+
+//< too-many-upvalues
+    unsafe { (*compiler).upvalues[upvalueCount as usize].isLocal = isLocal };
+    unsafe { (*compiler).upvalues[upvalueCount as usize].index = index };
+    return {
+        let mut i: isize = unsafe { (*(*compiler).function).upvalueCount };
+        unsafe { (*(*compiler).function).upvalueCount += 1 };
+        i
+    };
+}
+//< Closures add-upvalue
+//> Closures resolve-upvalue
+unsafe fn resolveUpvalue(mut compiler: *mut Compiler, mut name: *mut Token) -> isize {
+    if unsafe { (*compiler).enclosing }.is_null() { return -1; }
+
+    let mut local: isize = unsafe { resolveLocal(unsafe { (*compiler).enclosing }, name) };
+    if local != -1 {
+//> mark-local-captured
+        unsafe { (*(*compiler).enclosing).locals[local as usize].isCaptured = true };
+//< mark-local-captured
+        return unsafe { addUpvalue(compiler, local as u8, true) };
+    }
+
+//> resolve-upvalue-recurse
+    let mut upvalue: isize = unsafe { resolveUpvalue(unsafe { (*compiler).enclosing }, name) };
+    if upvalue != -1 {
+        return unsafe { addUpvalue(compiler, upvalue as u8, false) };
+    }
+
+//< resolve-upvalue-recurse
+    return -1;
+}
+//< Closures resolve-upvalue
 //> Local Variables add-local
 unsafe fn addLocal(mut name: Token) {
 //> too-many-locals
@@ -451,6 +528,9 @@ unsafe fn addLocal(mut name: Token) {
 //> declare-undefined
     unsafe { (*local).depth = -1 };
 //< declare-undefined
+//> Closures init-is-captured
+    unsafe { (*local).isCaptured = false };
+//< Closures init-is-captured
 }
 //< Local Variables add-local
 //> Local Variables declare-variable
@@ -654,6 +734,11 @@ unsafe fn namedVariable(mut name: Token, mut canAssign: bool) {
     if arg != -1 {
         getOp = OP_GET_LOCAL;
         setOp = OP_SET_LOCAL;
+//> Closures named-variable-upvalue
+    } else if { arg = unsafe { resolveUpvalue(unsafe { current }, &mut name as *mut Token) }; arg } != -1 {
+        getOp = OP_GET_UPVALUE;
+        setOp = OP_SET_UPVALUE;
+//< Closures named-variable-upvalue
     } else {
         arg = unsafe { identifierConstant(&mut name as *mut Token) } as isize;
         getOp = OP_GET_GLOBAL;
@@ -943,7 +1028,19 @@ unsafe fn function(mut r#type: FunctionType) {
     unsafe { block() };
 
     let mut function: *mut ObjFunction = unsafe { endCompiler() };
+/* Calls and Functions compile-function < Closures emit-closure
     unsafe { emitBytes(OP_CONSTANT as u8, unsafe { makeConstant(OBJ_VAL!(function)) }) };
+*/
+//> Closures emit-closure
+    unsafe { emitBytes(OP_CLOSURE as u8, unsafe { makeConstant(OBJ_VAL!(function)) }) };
+//< Closures emit-closure
+//> Closures capture-upvalues
+
+    for mut i in 0..unsafe { (*function).upvalueCount } {
+        unsafe { emitByte(if compiler.upvalues[i as usize].isLocal { 1 } else { 0 }) };
+        unsafe { emitByte(compiler.upvalues[i as usize].index) };
+    }
+//< Closures capture-upvalues
 }
 //< Calls and Functions compile-function
 //> Calls and Functions fun-declaration

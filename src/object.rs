@@ -21,6 +21,13 @@ pub(crate) use OBJ_TYPE;
 //< obj-type-macro
 //> is-string
 
+//> Closures is-closure
+#[allow(unused_macros)]
+macro_rules! IS_CLOSURE {
+    ($value:expr) => { isObjType($value.clone(), OBJ_CLOSURE) };
+}
+pub(crate) use IS_CLOSURE;
+//< Closures is-closure
 //> Calls and Functions is-function
 #[allow(unused_macros)]
 macro_rules! IS_FUNCTION {
@@ -42,6 +49,15 @@ pub(crate) use IS_STRING;
 //< is-string
 //> as-string
 
+//> Closures as-closure
+macro_rules! AS_CLOSURE {
+    ($value:expr) => {{
+        let value = $value;
+        unsafe { AS_OBJ!(value) as *mut ObjClosure }
+    }};
+}
+pub(crate) use AS_CLOSURE;
+//< Closures as-closure
 //> Calls and Functions as-function
 macro_rules! AS_FUNCTION {
     ($value:expr) => {{
@@ -81,6 +97,9 @@ pub(crate) use AS_STR;
 #[derive(Clone)] // Copy, Eq, Ord too but made explicit
 #[repr(u8)]
 pub enum ObjType {
+//> Closures obj-type-closure
+    OBJ_CLOSURE,
+//< Closures obj-type-closure
 //> Calls and Functions obj-type-function
     OBJ_FUNCTION,
 //< Calls and Functions obj-type-function
@@ -88,6 +107,9 @@ pub enum ObjType {
     OBJ_NATIVE,
 //< Calls and Functions obj-type-native
     OBJ_STRING,
+//> Closures obj-type-upvalue
+    OBJ_UPVALUE,
+//< Closures obj-type-upvalue
 }
 pub use ObjType::*;
 //< obj-type
@@ -107,6 +129,9 @@ pub struct Obj {
 pub struct ObjFunction {
     pub obj: Obj,
     pub arity: isize,
+//> Closures upvalue-count
+    pub upvalueCount: isize,
+//< Closures upvalue-count
     pub chunk: Chunk,
     pub name: *mut ObjString,
 }
@@ -135,7 +160,36 @@ pub struct ObjString {
 //< Hash Tables obj-string-hash
 }
 //< obj-string
+//> Closures obj-upvalue
+#[derive(Clone)] // Copy too but made explicit and as a self-referential struct, unsafely Unpin
+#[repr(C)]
+pub struct ObjUpvalue {
+    pub obj: Obj,
+    pub location: *mut Value,
+//> closed-field
+    pub closed: Value,
+//< closed-field
+//> next-field
+    pub next: *mut ObjUpvalue,
+//< next-field
+}
+//< Closures obj-upvalue
+//> Closures obj-closure
+#[derive(Clone)] // Copy too but made explicit
+#[repr(C)]
+pub struct ObjClosure {
+    pub obj: Obj,
+    pub function: *mut ObjFunction,
+//> upvalue-fields
+    pub upvalues: *mut *mut ObjUpvalue,
+    pub upvalueCount: isize,
+//< upvalue-fields
+}
+//< Closures obj-closure
 
+//> Closures new-closure-h
+// no need to forward declare newClosure
+//< Closures new-closure-h
 //> Calls and Functions new-function-h
 // no need to forward declare newFunction
 //< Calls and Functions new-function-h
@@ -147,6 +201,9 @@ pub struct ObjString {
 //< take-string-h
 //> copy-string-h
 // no need to forward declare copyString
+//> Closures new-upvalue-h
+// no need to forward declare newUpvalue
+//< Closures new-upvalue-h
 //> print-object-h
 // no need to forward declare printObject
 //< print-object-h
@@ -187,10 +244,32 @@ unsafe fn allocateObject(mut size: usize, mut r#type: ObjType) -> *mut Obj {
     return object;
 }
 //< allocate-object
+//> Closures new-closure
+pub unsafe fn newClosure(mut function: *mut ObjFunction) -> *mut ObjClosure {
+//> allocate-upvalue-array
+    let mut upvalues: *mut *mut ObjUpvalue =
+        unsafe { ALLOCATE!(*mut ObjUpvalue, unsafe { (*function).upvalueCount } as usize) };
+    for mut i in 0..unsafe { (*function).upvalueCount } {
+        unsafe { *upvalues.offset(i) = null_mut() };
+    }
+
+//< allocate-upvalue-array
+    let mut closure: *mut ObjClosure = unsafe { ALLOCATE_OBJ!(ObjClosure, OBJ_CLOSURE) };
+    unsafe { (*closure).function = function };
+//> init-upvalue-fields
+    unsafe { (*closure).upvalues = upvalues };
+    unsafe { (*closure).upvalueCount = unsafe { (*function).upvalueCount } };
+//< init-upvalue-fields
+    return closure;
+}
+//< Closures new-closure
 //> Calls and Functions new-function
 pub unsafe fn newFunction() -> *mut ObjFunction {
     let mut function: *mut ObjFunction = unsafe { ALLOCATE_OBJ!(ObjFunction, OBJ_FUNCTION) };
     unsafe { (*function).arity = 0 };
+//> Closures init-upvalue-count
+    unsafe { (*function).upvalueCount = 0 };
+//< Closures init-upvalue-count
     unsafe { (*function).name = null_mut() };
     unsafe { initChunk(unsafe { &mut (*function).chunk } as *mut Chunk) };
     return function;
@@ -274,6 +353,19 @@ pub unsafe fn copyString(mut chars: *const u8, mut length: isize) -> *mut ObjStr
     return unsafe { allocateString(heapChars, length, hash) };
 //< Hash Tables copy-string-allocate
 }
+//> Closures new-upvalue
+pub unsafe fn newUpvalue(mut slot: *mut Value) -> *mut ObjUpvalue {
+    let mut upvalue: *mut ObjUpvalue = unsafe { ALLOCATE_OBJ!(ObjUpvalue, OBJ_UPVALUE) };
+//> init-closed
+    unsafe { (*upvalue).closed = NIL_VAL!() };
+//< init-closed
+    unsafe { (*upvalue).location = slot };
+//> init-next
+    unsafe { (*upvalue).next = null_mut() };
+//< init-next
+    return upvalue;
+}
+//< Closures new-upvalue
 //> Calls and Functions print-function-helper
 unsafe fn printFunction(mut function: *mut ObjFunction) {
 //> print-script
@@ -288,6 +380,11 @@ unsafe fn printFunction(mut function: *mut ObjFunction) {
 //> print-object
 pub unsafe fn printObject(mut value: Value) {
     match unsafe { OBJ_TYPE!(value.clone()) } {
+//> Closures print-closure
+        OBJ_CLOSURE => {
+            unsafe { printFunction(unsafe { (*unsafe { AS_CLOSURE!(value) }).function }) };
+        }
+//< Closures print-closure
 //> Calls and Functions print-function
         OBJ_FUNCTION => {
             unsafe { printFunction(unsafe { AS_FUNCTION!(value) }) };
@@ -301,6 +398,11 @@ pub unsafe fn printObject(mut value: Value) {
         OBJ_STRING => {
             print!("{}", unsafe { AS_STR!(value) });
         }
+//> Closures print-upvalue
+        OBJ_UPVALUE => {
+            print!("upvalue");
+        }
+//< Closures print-upvalue
     };
 }
 //< print-object

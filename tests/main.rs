@@ -280,3 +280,27 @@ mod calls_and_functions {
     case!(while__return_inside);
 }
 //< Calls and Functions tests
+//> Closures tests
+mod closures {
+    use super::case;
+    case!(closure__assign_to_closure);
+    case!(closure__assign_to_shadowed_later);
+    case!(closure__close_over_function_parameter);
+    case!(closure__close_over_later_variable);
+    case!(closure__closed_closure_in_function);
+    case!(closure__nested_closure);
+    case!(closure__open_closure_in_function);
+    case!(closure__reference_closure_multiple_times);
+    case!(closure__reuse_closure_slot);
+    case!(closure__shadow_closure_with_local);
+    case!(closure__unused_closure);
+    case!(closure__unused_later_closure);
+    case!(for__closure_in_body);
+    case!(for__return_closure);
+    case!(function__local_recursion);
+    case!(limit__too_many_upvalues);
+    case!(regression__40);
+    case!(while__closure_in_body);
+    case!(while__return_closure);
+}
+//< Closures tests

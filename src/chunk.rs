@@ -40,6 +40,10 @@ pub enum OpCode {
 //> Global Variables set-global-op
     OP_SET_GLOBAL,
 //< Global Variables set-global-op
+//> Closures upvalue-ops
+    OP_GET_UPVALUE,
+    OP_SET_UPVALUE,
+//< Closures upvalue-ops
 //> Types of Values comparison-ops
     OP_EQUAL,
     OP_GREATER,
@@ -78,6 +82,12 @@ pub enum OpCode {
 //> Calls and Functions op-call
     OP_CALL,
 //< Calls and Functions op-call
+//> Closures closure-op
+    OP_CLOSURE,
+//< Closures closure-op
+//> Closures close-upvalue-op
+    OP_CLOSE_UPVALUE,
+//< Closures close-upvalue-op
     OP_RETURN,
 }
 pub use OpCode::*;
