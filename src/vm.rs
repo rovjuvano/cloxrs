@@ -796,6 +796,16 @@ unsafe fn run() -> InterpretResult {
                 unsafe { push(value) };
             }
 //< Classes and Instances interpret-set-property
+//> Superclasses interpret-get-super
+            OP_GET_SUPER => {
+                let mut name: *mut ObjString = unsafe { READ_STRING!() };
+                let mut superclass: *mut ObjClass = unsafe { AS_CLASS!(unsafe { pop() }) };
+
+                if !unsafe { bindMethod(superclass, name) } {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+            }
+//< Superclasses interpret-get-super
 //> Types of Values interpret-equal
             OP_EQUAL => {
                 let mut b: Value = unsafe { pop() };
@@ -913,6 +923,17 @@ unsafe fn run() -> InterpretResult {
                 unsafe { frame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize - 1] } as *mut CallFrame };
             }
 //< Methods and Initializers interpret-invoke
+//> Superclasses interpret-super-invoke
+            OP_SUPER_INVOKE => {
+                let mut method: *mut ObjString = unsafe { READ_STRING!() };
+                let mut argCount: isize = unsafe { READ_BYTE!() } as isize;
+                let mut superclass: *mut ObjClass = unsafe { AS_CLASS!(unsafe { pop() }) };
+                if !unsafe { invokeFromClass(superclass, method, argCount) } {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                unsafe { frame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize - 1] } as *mut CallFrame };
+            }
+//< Superclasses interpret-super-invoke
 //> Closures interpret-closure
             OP_CLOSURE => {
                 let mut function: *mut ObjFunction = unsafe { AS_FUNCTION!(unsafe { READ_CONSTANT!() }) };
@@ -971,6 +992,22 @@ unsafe fn run() -> InterpretResult {
                 unsafe { push(OBJ_VAL!(unsafe { newClass(unsafe { READ_STRING!() }) })) };
             }
 //< Classes and Instances interpret-class
+//> Superclasses interpret-inherit
+            OP_INHERIT => {
+                let mut superclass: Value = unsafe { peek(1) };
+//> inherit-non-class
+                if !IS_CLASS!(superclass) {
+                    unsafe { runtimeError(format_args!("Superclass must be a class.")) };
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+//< inherit-non-class
+                let mut subclass: *mut ObjClass = unsafe { AS_CLASS!(unsafe { peek(0) }) };
+                unsafe { tableAddAll(unsafe { &mut (*unsafe { AS_CLASS!(superclass) }).methods } as *mut Table,
+                    unsafe { &mut (*subclass).methods } as *mut Table) };
+                let _ = unsafe { pop() }; // Subclass.
+            }
+//< Superclasses interpret-inherit
 //> Methods and Initializers interpret-method
             OP_METHOD => {
                 unsafe { defineMethod(unsafe { READ_STRING!() }) };

@@ -142,6 +142,10 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_SET_PROPERTY =>
             unsafe { constantInstruction("OP_SET_PROPERTY", chunk, offset) },
 //< Classes and Instances disassemble-property-ops
+//> Superclasses disassemble-get-super
+        OP_GET_SUPER =>
+            unsafe { constantInstruction("OP_GET_SUPER", chunk, offset) },
+//< Superclasses disassemble-get-super
 //> Types of Values disassemble-comparison
         OP_EQUAL =>
             simpleInstruction("OP_EQUAL", offset),
@@ -190,6 +194,10 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_INVOKE =>
             unsafe { invokeInstruction("OP_INVOKE", chunk, offset) },
 //< Methods and Initializers disassemble-invoke
+//> Superclasses disassemble-super-invoke
+        OP_SUPER_INVOKE =>
+            unsafe { invokeInstruction("OP_SUPER_INVOKE", chunk, offset) },
+//< Superclasses disassemble-super-invoke
 //> Closures disassemble-closure
         OP_CLOSURE => {
             offset += 1;
@@ -225,6 +233,10 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_CLASS =>
             unsafe { constantInstruction("OP_CLASS", chunk, offset) },
 //< Classes and Instances disassemble-class
+//> Superclasses disassemble-inherit
+        OP_INHERIT =>
+            simpleInstruction("OP_INHERIT", offset),
+//< Superclasses disassemble-inherit
 //> Methods and Initializers disassemble-method
         OP_METHOD =>
             unsafe { constantInstruction("OP_METHOD", chunk, offset) },

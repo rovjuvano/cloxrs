@@ -181,6 +181,9 @@ struct Compiler {
 #[derive(Clone)] // Copy too but made explicit
 struct ClassCompiler {
     pub enclosing: *mut ClassCompiler,
+//> Superclasses has-superclass
+    pub hasSuperclass: bool,
+//< Superclasses has-superclass
 }
 //< Methods and Initializers class-compiler-struct
 
@@ -846,6 +849,50 @@ unsafe fn variable(mut canAssign: bool) {
     unsafe { namedVariable(unsafe { parser.previous.clone() }, canAssign) };
 }
 //< Global Variables variable
+//> Superclasses synthetic-token
+unsafe fn syntheticToken(mut text: *const u8) -> Token {
+    let mut token: Token = unsafe { uninit::<Token>() };
+    token.r#type = TOKEN_IDENTIFIER;
+    token.start = text;
+    token.length = unsafe { strlen(text as *const c_char) } as isize;
+    token.line = 0;
+    return token;
+}
+//< Superclasses synthetic-token
+//> Superclasses super
+unsafe fn super_/* r#:cry: */(mut _canAssign: bool) {
+//> super-errors
+    if unsafe { currentClass.is_null() } {
+        unsafe { error("Can't use 'super' outside of a class.") };
+    } else if !unsafe { (*currentClass).hasSuperclass } {
+        unsafe { error("Can't use 'super' in a class with no superclass.") };
+    }
+
+//< super-errors
+    unsafe { consume(TOKEN_DOT, "Expect '.' after 'super'.") };
+    unsafe { consume(TOKEN_IDENTIFIER, "Expect superclass method name.") };
+    let mut name: u8 = unsafe { identifierConstant(unsafe { &mut parser.previous } as *mut Token) };
+//> super-get
+
+    unsafe { namedVariable(unsafe { syntheticToken("this\0".as_ptr()) }, false) };
+/* Superclasses super-get < Superclasses super-invoke
+    unsafe { namedVariable(unsafe { syntheticToken("super\0".as_ptr() }), false) };
+    unsafe { emitBytes(OP_GET_SUPER as u8, name) };
+*/
+//< super-get
+//> super-invoke
+    if unsafe { r#match(TOKEN_LEFT_PAREN) } {
+        let mut argCount: u8 = unsafe { argumentList() };
+        unsafe { namedVariable(unsafe { syntheticToken("super\0".as_ptr()) }, false) };
+        unsafe { emitBytes(OP_SUPER_INVOKE as u8, name) };
+        unsafe { emitByte(argCount) };
+    } else {
+        unsafe { namedVariable(unsafe { syntheticToken("super\0".as_ptr()) }, false) };
+        unsafe { emitBytes(OP_GET_SUPER as u8, name) };
+    }
+//< super-invoke
+}
+//< Superclasses super
 //> Methods and Initializers this
 unsafe fn this(mut _canAssign: bool) {
 //> this-outside-class
@@ -1002,7 +1049,12 @@ static mut rules: ParseRules = parse_rules!{
 //< Jumping Back and Forth table-or
     [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
+/* Compiling Expressions rules < Superclasses table-super
     [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
+*/
+//> Superclasses table-super
+    [TOKEN_SUPER]         = {super_,   NULL,   PREC_NONE},
+//< Superclasses table-super
 /* Compiling Expressions rules < Methods and Initializers table-this
     [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
 */
@@ -1167,10 +1219,38 @@ unsafe fn classDeclaration() {
 
 //> Methods and Initializers create-class-compiler
     let mut classCompiler: ClassCompiler = unsafe { uninit::<ClassCompiler>() };
+//> Superclasses init-has-superclass
+    classCompiler.hasSuperclass = false;
+//< Superclasses init-has-superclass
     classCompiler.enclosing = unsafe { currentClass };
     unsafe { currentClass = &mut classCompiler as *mut ClassCompiler };
 
 //< Methods and Initializers create-class-compiler
+//> Superclasses compile-superclass
+    if unsafe { r#match(TOKEN_LESS) } {
+        unsafe { consume(TOKEN_IDENTIFIER, "Expect superclass name.") };
+        unsafe { variable(false) };
+//> inherit-self
+
+        if unsafe { identifiersEqual(&mut className as *mut Token, unsafe { &mut parser.previous } as *mut Token) } {
+            unsafe { error("A class can't inherit from itself.") };
+        }
+
+//< inherit-self
+//> superclass-variable
+        unsafe { beginScope() };
+        unsafe { addLocal(unsafe { syntheticToken("super\0".as_ptr()) }) };
+        unsafe { defineVariable(0) };
+
+//< superclass-variable
+        unsafe { namedVariable(className.clone(), false) };
+        unsafe { emitByte(OP_INHERIT as u8) };
+//> set-has-superclass
+        classCompiler.hasSuperclass = true;
+//< set-has-superclass
+    }
+
+//< Superclasses compile-superclass
 //> Methods and Initializers load-class
     unsafe { namedVariable(className, false) };
 //< Methods and Initializers load-class
@@ -1184,6 +1264,12 @@ unsafe fn classDeclaration() {
 //> Methods and Initializers pop-class
     unsafe { emitByte(OP_POP as u8) };
 //< Methods and Initializers pop-class
+//> Superclasses end-superclass-scope
+
+    if classCompiler.hasSuperclass {
+        unsafe { endScope() };
+    }
+//< Superclasses end-superclass-scope
 //> Methods and Initializers pop-enclosing
 
     unsafe { currentClass = unsafe { (*currentClass).enclosing } };

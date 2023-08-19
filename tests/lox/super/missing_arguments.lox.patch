@@ -1,0 +1,9 @@
+--- a/super/missing_arguments.lox	1970-01-01 00:00:00.000000000 +0000
++++ b/super/missing_arguments.lox	1970-01-01 00:00:00.000000000 +0000
+@@ -11,3 +11,6 @@
+ }
+ 
+ Derived().foo();
++// stack trace
++// [line 9] in foo()
++// [line 13] in script

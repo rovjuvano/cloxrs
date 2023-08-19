@@ -1,0 +1,12 @@
+class Base {}
+
+class Derived < Base {
+  foo() {
+    super.doesNotExist(1); // expect runtime error: Undefined property 'doesNotExist'.
+  }
+}
+
+Derived().foo();
+// stack trace
+// [line 5] in foo()
+// [line 9] in script

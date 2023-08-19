@@ -33,11 +33,15 @@ macro_rules! IS_BOUND_METHOD {
 pub(crate) use IS_BOUND_METHOD;
 //< Methods and Initializers is-bound-method
 //> Classes and Instances is-class
+/* Classes and Instances is-class < Superclasses inherit-non-class
 #[allow(unused_macros)]
+*/
 macro_rules! IS_CLASS {
     ($value:expr) => { isObjType($value.clone(), OBJ_CLASS) };
 }
+/* Classes and Instances is-class < Superclasses inherit-non-class
 #[allow(unused_imports)]
+*/
 pub(crate) use IS_CLASS;
 //< Classes and Instances is-class
 //> Closures is-closure

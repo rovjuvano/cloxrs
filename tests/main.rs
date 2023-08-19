@@ -377,3 +377,40 @@ mod methods_and_initializers {
     case!(variable__local_from_method);
 }
 //< Methods and Initializers tests
+//> Superclasses tests
+mod superclasses {
+    use super::case;
+    case!(class__inherit_self);
+    case!(class__inherited_method);
+    case!(class__local_inherit_other);
+    case!(class__local_inherit_self);
+    case!(inheritance__constructor);
+    case!(inheritance__inherit_from_function);
+    case!(inheritance__inherit_from_nil);
+    case!(inheritance__inherit_from_number);
+    case!(inheritance__inherit_methods);
+    case!(inheritance__parenthesized_superclass);
+    case!(inheritance__set_fields_from_base_class);
+    case!(regression__394);
+    case!(super__bound_method);
+    case!(super__call_other_method);
+    case!(super__call_same_method);
+    case!(super__closure);
+    case!(super__constructor);
+    case!(super__extra_arguments);
+    case!(super__indirectly_inherited);
+    case!(super__missing_arguments);
+    case!(super__no_superclass_bind);
+    case!(super__no_superclass_call);
+    case!(super__no_superclass_method);
+    case!(super__parenthesized);
+    case!(super__reassign_superclass);
+    case!(super__super_at_top_level);
+    case!(super__super_in_closure_in_inherited_method);
+    case!(super__super_in_inherited_method);
+    case!(super__super_in_top_level_function);
+    case!(super__super_without_dot);
+    case!(super__super_without_name);
+    case!(super__this_in_superclass_method);
+}
+//< Superclasses tests

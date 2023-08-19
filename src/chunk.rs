@@ -48,6 +48,9 @@ pub enum OpCode {
     OP_GET_PROPERTY,
     OP_SET_PROPERTY,
 //< Classes and Instances property-ops
+//> Superclasses get-super-op
+    OP_GET_SUPER,
+//< Superclasses get-super-op
 //> Types of Values comparison-ops
     OP_EQUAL,
     OP_GREATER,
@@ -89,6 +92,9 @@ pub enum OpCode {
 //> Methods and Initializers invoke-op
     OP_INVOKE,
 //< Methods and Initializers invoke-op
+//> Superclasses super-invoke-op
+    OP_SUPER_INVOKE,
+//< Superclasses super-invoke-op
 //> Closures closure-op
     OP_CLOSURE,
 //< Closures closure-op
@@ -99,6 +105,9 @@ pub enum OpCode {
 //> Classes and Instances class-op
     OP_CLASS,
 //< Classes and Instances class-op
+//> Superclasses inherit-op
+    OP_INHERIT,
+//< Superclasses inherit-op
 //> Methods and Initializers method-op
     OP_METHOD
 //< Methods and Initializers method-op

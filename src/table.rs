@@ -197,7 +197,9 @@ pub unsafe fn tableDelete(mut table: *mut Table, mut key: *mut ObjString) -> boo
 }
 //< table-delete
 //> table-add-all
+/* Hash Tables table-add-all < Superclasses inherit-non-class
 #[allow(dead_code)]
+*/
 pub unsafe fn tableAddAll(mut from: *mut Table, mut to: *mut Table) {
     for mut i in 0..unsafe { (*from).capacity } {
         let mut entry: *mut Entry = unsafe { (*from).entries.offset(i) };
