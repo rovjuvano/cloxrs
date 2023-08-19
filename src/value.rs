@@ -10,6 +10,10 @@ use crate::object::*;
 //< Strings value-include-object
 use crate::memory::*;
 //> Chunks of Bytecode value-h
+//> Optimization include-string
+// no need for additional includes here
+
+//< Optimization include-string
 pub use crate::common::*;
 
 //> Strings forward-declare-obj
@@ -19,6 +23,130 @@ pub use crate::common::*;
 //< forward-declare-obj-string
 
 //< Strings forward-declare-obj
+//> Optimization nan-boxing
+#[cfg(NAN_BOXING)]
+pub use nan_boxing::*;
+#[cfg(NAN_BOXING)]
+mod nan_boxing {
+//> num-to-value
+use ::core::mem::*;
+//< num-to-value
+//> qnan
+
+//> sign-bit
+pub const SIGN_BIT: u64 = 0x8000000000000000;
+//< sign-bit
+pub const QNAN:     u64 = 0x7ffc000000000000;
+//< qnan
+//> tags
+
+pub const TAG_NIL:   u64 = 1; // 01.
+pub const TAG_FALSE: u64 = 2; // 10.
+pub const TAG_TRUE:  u64 = 3; // 11.
+//< tags
+
+pub type Value = u64;
+//> is-number
+
+//> is-bool
+macro_rules! IS_BOOL {
+    ($value:expr) => { ($value | 1) == TRUE_VAL!() };
+}
+pub(crate) use IS_BOOL;
+//< is-bool
+//> is-nil
+macro_rules! IS_NIL {
+    ($value:expr) => { $value == NIL_VAL!() };
+}
+pub(crate) use IS_NIL;
+//< is-nil
+macro_rules! IS_NUMBER {
+    ($value:expr) => { ($value & QNAN) != QNAN };
+}
+pub(crate) use IS_NUMBER;
+//< is-number
+//> is-obj
+macro_rules! IS_OBJ {
+    ($value:expr) => { $value & (QNAN | SIGN_BIT) == (QNAN | SIGN_BIT) };
+}
+pub(crate) use IS_OBJ;
+//< is-obj
+//> as-number
+
+//> as-bool
+macro_rules! AS_BOOL {
+    ($value:expr) => { $value == TRUE_VAL!() };
+}
+pub(crate) use AS_BOOL;
+//< as-bool
+macro_rules! AS_NUMBER {
+    ($value:expr) => {{
+        let value = $value;
+        unsafe { valueToNum(value) }
+    }};
+}
+pub(crate) use AS_NUMBER;
+//< as-number
+//> as-obj
+macro_rules! AS_OBJ {
+    ($value:expr) => { ($value & !(SIGN_BIT | QNAN)) as *mut Obj };
+}
+pub(crate) use AS_OBJ;
+//< as-obj
+//> number-val
+
+//> bool-val
+macro_rules! BOOL_VAL {
+    ($b:expr) => { if $b { TRUE_VAL!() } else { FALSE_VAL!() } };
+}
+pub(crate) use BOOL_VAL;
+//< bool-val
+//> false-true-vals
+macro_rules! FALSE_VAL { () => { QNAN | TAG_FALSE }; }
+pub(crate) use FALSE_VAL;
+macro_rules! TRUE_VAL { () => { QNAN | TAG_TRUE }; }
+pub(crate) use TRUE_VAL;
+//< false-true-vals
+//> nil-val
+macro_rules! NIL_VAL { () => { QNAN | TAG_NIL }; }
+pub(crate) use NIL_VAL;
+//< nil-val
+macro_rules! NUMBER_VAL {
+    ($num:expr) => {{
+        let num = $num;
+        unsafe { numToValue(num) }
+    }};
+}
+pub(crate) use NUMBER_VAL;
+//< number-val
+//> obj-val
+macro_rules! OBJ_VAL {
+    ($obj:expr) => { SIGN_BIT | QNAN | ($obj as u64) };
+}
+pub(crate) use OBJ_VAL;
+//< obj-val
+//> value-to-num
+
+#[inline]
+pub unsafe fn valueToNum(mut value: Value) -> f64 {
+    unsafe { transmute(value) }
+}
+//< value-to-num
+//> num-to-value
+
+#[inline]
+pub unsafe fn numToValue(mut num: f64) -> Value {
+    unsafe { transmute(num) }
+}
+//< num-to-value
+}
+
+#[cfg(not(NAN_BOXING))]
+pub use union::*;
+#[cfg(not(NAN_BOXING))]
+mod union {
+use crate::object::*;
+//< Optimization nan-boxing
 //> Types of Values value-type
 #[derive(Clone)] // Copy, Eq, Ord too but made explicit
 #[repr(u8)]
@@ -110,6 +238,9 @@ macro_rules! OBJ_VAL {
 pub(crate) use OBJ_VAL;
 //< Strings obj-val
 //< Types of Values value-macros
+//> Optimization end-if-nan-boxing
+}
+//< Optimization end-if-nan-boxing
 //> value-array
 
 #[derive(Clone)] // Copy too but made explicit
@@ -159,6 +290,19 @@ pub unsafe fn freeValueArray(mut array: *mut ValueArray) {
 //< free-value-array
 //> print-value
 pub unsafe fn printValue(mut value: Value) {
+//> Optimization print-value
+    #[cfg(NAN_BOXING)]
+    if IS_BOOL!(value) {
+        print!("{}", if AS_BOOL!(value) { "true" } else { "false" });
+    } else if IS_NIL!(value) {
+        print!("nil");
+    } else if IS_NUMBER!(value) {
+        print!("{}", unsafe { AS_NUMBER!(value) });
+    } else if IS_OBJ!(value) {
+        unsafe { printObject(value) };
+    }
+    #[cfg(not(NAN_BOXING))]
+//< Optimization print-value
 /* Chunks of Bytecode print-value < Types of Values print-number-value
     print!("{}", value);
 */
@@ -177,10 +321,23 @@ pub unsafe fn printValue(mut value: Value) {
 //< Strings call-print-object
     }
 //< Types of Values print-value
+//> Optimization end-print-value
+// no need to close conditional compilation block
+//< Optimization end-print-value
 }
 //< print-value
 //> Types of Values values-equal
 pub unsafe fn valuesEqual(mut a: Value, mut b: Value) -> bool {
+//> Optimization values-equal
+    #[cfg(NAN_BOXING)] {
+//> nan-equality
+    if IS_NUMBER!(a) && IS_NUMBER!(b) {
+        return unsafe { AS_NUMBER!(a) } == unsafe { AS_NUMBER!(b) };
+    }
+//< nan-equality
+    return a == b;
+    } #[cfg(not(NAN_BOXING))] {
+//< Optimization values-equal
     if a.r#type.clone() as u8 != b.r#type.clone() as u8 { return false; }
     return match a.r#type {
         VAL_BOOL   => (unsafe { AS_BOOL!(a) } == unsafe { AS_BOOL!(b) }),
@@ -201,5 +358,8 @@ pub unsafe fn valuesEqual(mut a: Value, mut b: Value) -> bool {
         #[allow(unreachable_patterns)]
         _ => false, // Unreachable.
     };
+//> Optimization end-values-equal
+    }
+//< Optimization end-values-equal
 }
 //< Types of Values values-equal

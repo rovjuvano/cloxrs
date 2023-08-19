@@ -79,7 +79,12 @@ pub unsafe fn freeTable(mut table: *mut Table) {
 //< omit
 unsafe fn findEntry(mut entries: *mut Entry, mut capacity: isize,
         mut key: *mut ObjString) -> *mut Entry {
+/* Hash Tables find-entry < Optimization initial-index
     let mut index: u32 = unsafe { (*key).hash } % capacity as u32;
+*/
+//> Optimization initial-index
+    let mut index: u32 = unsafe { (*key).hash } & (capacity - 1) as u32;
+//< Optimization initial-index
 //> find-entry-tombstone
     let mut tombstone: *mut Entry = null_mut();
 
@@ -106,7 +111,12 @@ unsafe fn findEntry(mut entries: *mut Entry, mut capacity: isize,
         }
 //< find-tombstone
 
+/* Hash Tables find-entry < Optimization next-index
         index = (index + 1) % capacity as u32;
+*/
+//> Optimization next-index
+        index = (index + 1) & (capacity - 1) as u32;
+//< Optimization next-index
     }
 }
 //< find-entry
@@ -214,7 +224,12 @@ pub unsafe fn tableFindString(mut table: *mut Table, mut chars: *const u8,
         mut length: isize, mut hash: u32) -> *mut ObjString {
     if unsafe { (*table).count } == 0 { return null_mut(); }
 
+/* Hash Tables table-find-string < Optimization find-string-index
     let mut index: u32 = hash % unsafe { (*table).capacity } as u32;
+*/
+//> Optimization find-string-index
+    let mut index: u32 = hash & (unsafe { (*table).capacity } - 1) as u32;
+//< Optimization find-string-index
     loop {
         let mut entry: *mut Entry = unsafe { (*table).entries.offset(index as isize) };
         if unsafe { (*entry).key }.is_null() {
@@ -227,7 +242,12 @@ pub unsafe fn tableFindString(mut table: *mut Table, mut chars: *const u8,
             return unsafe { (*entry).key };
         }
 
+/* Hash Tables table-find-string < Optimization find-string-next
         index = (index + 1) % unsafe { (*table).capacity } as u32;
+*/
+//> Optimization find-string-next
+        index = (index + 1) & (unsafe { (*table).capacity } - 1) as u32;
+//< Optimization find-string-next
     }
 }
 //< table-find-string

@@ -414,3 +414,16 @@ mod superclasses {
     case!(super__this_in_superclass_method);
 }
 //< Superclasses tests
+//> Optimization tests
+// benchmark/binary_trees.lox
+// benchmark/equality.lox
+// benchmark/fib.lox
+// benchmark/instantiation.lox
+// benchmark/invocation.lox
+// benchmark/method_call.lox
+// benchmark/properties.lox
+// benchmark/string_equality.lox
+// benchmark/trees.lox
+// benchmark/zoo.lox
+// benchmark/zoo_batch.lox
+//< Optimization tests

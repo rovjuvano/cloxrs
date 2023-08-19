@@ -1,2 +1,2 @@
 [build]
-# rustflags = "--cfg DEBUG_LOG_GC --cfg DEBUG_PRINT_CODE --cfg DEBUG_STRESS_GC --cfg DEBUG_TRACE_EXECUTION"
+# rustflags = "--cfg DEBUG_LOG_GC --cfg DEBUG_PRINT_CODE --cfg DEBUG_STRESS_GC --cfg DEBUG_TRACE_EXECUTION --cfg NAN_BOXING"

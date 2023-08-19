@@ -5,6 +5,9 @@ pub use ::core::clone::Clone;
 use ::core::mem::MaybeUninit;
 //> A Virtual Machine define-debug-trace
 
+//> Optimization define-nan-boxing
+// rustflags = "--cfg NAN_BOXING"
+//< Optimization define-nan-boxing
 //> Compiling Expressions define-debug-print-code
 // rustflags = "--cfg DEBUG_PRINT_CODE"
 //< Compiling Expressions define-debug-print-code
