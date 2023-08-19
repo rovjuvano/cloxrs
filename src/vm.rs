@@ -208,6 +208,15 @@ unsafe fn run() -> InterpretResult {
         }};
     }
 //< read-constant
+//> Jumping Back and Forth read-short
+    macro_rules! READ_SHORT {
+        () => {{
+            let mut short: u16 = ((unsafe { *vm.ip } as u16) << 8) | (unsafe { *vm.ip.offset(1) } as u16);
+            unsafe { vm.ip = unsafe { vm.ip.offset(2) } };
+            short
+        }};
+    }
+//< Jumping Back and Forth read-short
 //> Global Variables read-string
     macro_rules! READ_STRING {
         () => {{ unsafe { AS_STRING!(unsafe { READ_CONSTANT!() }) } }};
@@ -390,6 +399,24 @@ unsafe fn run() -> InterpretResult {
                 print!("\n");
             }
 //< Global Variables interpret-print
+//> Jumping Back and Forth op-jump
+            OP_JUMP => {
+                let mut offset: u16 = unsafe { READ_SHORT!() };
+                unsafe { vm.ip = unsafe { vm.ip.offset(offset as isize) } };
+            }
+//< Jumping Back and Forth op-jump
+//> Jumping Back and Forth op-jump-if-false
+            OP_JUMP_IF_FALSE => {
+                let mut offset: u16 = unsafe { READ_SHORT!() };
+                if isFalsey(unsafe { peek(0) }) { unsafe { vm.ip = unsafe { vm.ip.offset(offset as isize) } }; }
+            }
+//< Jumping Back and Forth op-jump-if-false
+//> Jumping Back and Forth op-loop
+            OP_LOOP => {
+                let mut offset: u16 = unsafe { READ_SHORT!() };
+                unsafe { vm.ip = unsafe { vm.ip.offset(-(offset as isize)) } };
+            }
+//< Jumping Back and Forth op-loop
             OP_RETURN => {
 /* A Virtual Machine print-return < Global Variables op-return
                 unsafe { printValue(unsafe { pop() }) };
@@ -404,6 +431,9 @@ unsafe fn run() -> InterpretResult {
     }
 
 // no need to undefine READ_BYTE
+//> Jumping Back and Forth undef-read-short
+// no need to undefine READ_SHORT
+//< Jumping Back and Forth undef-read-short
 //> undef-read-constant
 // no need to undefine READ_CONSTANT
 //< undef-read-constant

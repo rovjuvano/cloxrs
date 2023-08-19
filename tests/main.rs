@@ -208,3 +208,36 @@ mod local_variables {
     case!(variable__use_local_in_initializer);
 }
 //< Local Variables tests
+//> Jumping Back and Forth tests
+mod jumping_back_and_forth {
+    use super::case;
+    case!(block__empty);
+    case!(for__class_in_body);
+    case!(for__fun_in_body);
+    case!(for__scope);
+    case!(for__statement_condition);
+    case!(for__statement_increment);
+    case!(for__statement_initializer);
+    case!(for__var_in_body);
+    case!(if__class_in_else);
+    case!(if__class_in_then);
+    case!(if__dangling_else);
+    case!(if__else);
+    case!(if__fun_in_else);
+    case!(if__fun_in_then);
+    case!(if__if);
+    case!(if__truth);
+    case!(if__var_in_else);
+    case!(if__var_in_then);
+    case!(limit__loop_too_large);
+    case!(logical_operator__and);
+    case!(logical_operator__and_truth);
+    case!(logical_operator__or);
+    case!(logical_operator__or_truth);
+    case!(variable__unreached_undefined);
+    case!(while__class_in_body);
+    case!(while__fun_in_body);
+    case!(while__syntax);
+    case!(while__var_in_body);
+}
+//< Jumping Back and Forth tests

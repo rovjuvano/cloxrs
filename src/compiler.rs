@@ -65,9 +65,13 @@ struct Parser {
 enum Precedence {
     PREC_NONE,
     PREC_ASSIGNMENT,  // =
+/* Compiling Expressions precedence < Jumping Back and Forth table-or
     #[allow(dead_code)]
+*/
     PREC_OR,          // or
+/* Compiling Expressions precedence < Jumping Back and Forth table-and
     #[allow(dead_code)]
+*/
     PREC_AND,         // and
 /* Compiling Expressions precedence < Types of Values table-equal
     #[allow(dead_code)]
@@ -214,6 +218,25 @@ unsafe fn emitBytes(mut byte1: u8, mut byte2: u8) {
     unsafe { emitByte(byte2) };
 }
 //< Compiling Expressions emit-bytes
+//> Jumping Back and Forth emit-loop
+unsafe fn emitLoop(mut loopStart: isize) {
+    unsafe { emitByte(OP_LOOP as u8) };
+
+    let mut offset: isize = unsafe { (*unsafe { currentChunk() }).count } - loopStart + 2;
+    if offset > u16::MAX as isize { unsafe { error("Loop body too large.") }; }
+
+    unsafe { emitByte(((offset >> 8) & 0xff) as u8) };
+    unsafe { emitByte((offset & 0xff) as u8) };
+}
+//< Jumping Back and Forth emit-loop
+//> Jumping Back and Forth emit-jump
+unsafe fn emitJump(mut instruction: OpCode) -> isize {
+    unsafe { emitByte(instruction as u8) };
+    unsafe { emitByte(0xff) };
+    unsafe { emitByte(0xff) };
+    return unsafe { (*unsafe { currentChunk() }).count } - 2;
+}
+//< Jumping Back and Forth emit-jump
 //> Compiling Expressions emit-return
 unsafe fn emitReturn() {
     unsafe { emitByte(OP_RETURN as u8) };
@@ -235,6 +258,19 @@ unsafe fn emitConstant(mut value: Value) {
     unsafe { emitBytes(OP_CONSTANT as u8, unsafe { makeConstant(value) }) };
 }
 //< Compiling Expressions emit-constant
+//> Jumping Back and Forth patch-jump
+unsafe fn patchJump(mut offset: isize) {
+    // -2 to adjust for the bytecode for the jump offset itself.
+    let mut jump: isize = unsafe { (*unsafe { currentChunk() }).count } - offset - 2;
+
+    if jump > u16::MAX as isize {
+        unsafe { error("Too much code to jump over.") };
+    }
+
+    unsafe { *(*unsafe { currentChunk() }).code.offset(offset) = ((jump >> 8) & 0xff) as u8 };
+    unsafe { *(*unsafe { currentChunk() }).code.offset(offset + 1) = (jump & 0xff) as u8 };
+}
+//< Jumping Back and Forth patch-jump
 //> Local Variables init-compiler
 unsafe fn initCompiler(mut compiler: *mut Compiler) {
     unsafe { (*compiler).localCount = 0 };
@@ -385,6 +421,16 @@ unsafe fn defineVariable(mut global: u8) {
     unsafe { emitBytes(OP_DEFINE_GLOBAL as u8, global) };
 }
 //< Global Variables define-variable
+//> Jumping Back and Forth and
+unsafe fn and(mut _canAssign: bool) {
+    let mut endJump: isize = unsafe { emitJump(OP_JUMP_IF_FALSE) };
+
+    unsafe { emitByte(OP_POP as u8) };
+    unsafe { parsePrecedence(PREC_AND) };
+
+    unsafe { patchJump(endJump) };
+}
+//< Jumping Back and Forth and
 //> Compiling Expressions binary
 /* Compiling Expressions binary < Global Variables binary
 unsafe fn binary() {
@@ -455,6 +501,18 @@ unsafe fn number(mut _canAssign: bool) {
 //< Types of Values const-number-val
 }
 //< Compiling Expressions number
+//> Jumping Back and Forth or
+unsafe fn or(mut _canAssign: bool) {
+    let mut elseJump: isize = unsafe { emitJump(OP_JUMP_IF_FALSE) };
+    let mut endJump: isize = unsafe { emitJump(OP_JUMP) };
+
+    unsafe { patchJump(elseJump) };
+    unsafe { emitByte(OP_POP as u8) };
+
+    unsafe { parsePrecedence(PREC_OR) };
+    unsafe { patchJump(endJump) };
+}
+//< Jumping Back and Forth or
 /* Strings parse-string < Global Variables string
 unsafe fn string() {
 */
@@ -631,7 +689,12 @@ static mut rules: ParseRules = parse_rules!{
     [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
 //< Strings table-string
     [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
+/* Compiling Expressions rules < Jumping Back and Forth table-and
     [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
+*/
+//> Jumping Back and Forth table-and
+    [TOKEN_AND]           = {NULL,     and,    PREC_AND},
+//< Jumping Back and Forth table-and
     [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
 /* Compiling Expressions rules < Types of Values table-false
@@ -649,7 +712,12 @@ static mut rules: ParseRules = parse_rules!{
 //> Types of Values table-nil
     [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
 //< Types of Values table-nil
+/* Compiling Expressions rules < Jumping Back and Forth table-or
     [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
+*/
+//> Jumping Back and Forth table-or
+    [TOKEN_OR]            = {NULL,     or,     PREC_OR},
+//< Jumping Back and Forth table-or
     [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
     [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
@@ -754,6 +822,102 @@ unsafe fn expressionStatement() {
     unsafe { emitByte(OP_POP as u8) };
 }
 //< Global Variables expression-statement
+//> Jumping Back and Forth for-statement
+unsafe fn forStatement() {
+//> for-begin-scope
+    unsafe { beginScope() };
+//< for-begin-scope
+    unsafe { consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.") };
+/* Jumping Back and Forth for-statement < Jumping Back and Forth for-initializer
+    unsafe { consume(TOKEN_SEMICOLON, "Expect ';'.") };
+*/
+//> for-initializer
+    if unsafe { r#match(TOKEN_SEMICOLON) } {
+        // No initializer.
+    } else if unsafe { r#match(TOKEN_VAR) } {
+        unsafe { varDeclaration() };
+    } else {
+        unsafe { expressionStatement() };
+    }
+//< for-initializer
+
+    let mut loopStart: isize = unsafe { (*unsafe { currentChunk() }).count };
+/* Jumping Back and Forth for-statement < Jumping Back and Forth for-exit
+    unsafe { consume(TOKEN_SEMICOLON, "Expect ';'.") };
+*/
+//> for-exit
+    let mut exitJump: isize = -1;
+    if !unsafe { r#match(TOKEN_SEMICOLON) } {
+        unsafe { expression() };
+        unsafe { consume(TOKEN_SEMICOLON, "Expect ';' after loop condition.") };
+
+        // Jump out of the loop if the condition is false.
+        exitJump = unsafe { emitJump(OP_JUMP_IF_FALSE) };
+        unsafe { emitByte(OP_POP as u8) }; // Condition.
+    }
+
+//< for-exit
+/* Jumping Back and Forth for-statement < Jumping Back and Forth for-increment
+    unsafe { consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.") };
+*/
+//> for-increment
+    if !unsafe { r#match(TOKEN_RIGHT_PAREN) } {
+        let mut bodyJump: isize = unsafe { emitJump(OP_JUMP) };
+        let mut incrementStart: isize = unsafe { (*unsafe { currentChunk() }).count };
+        unsafe { expression() };
+        unsafe { emitByte(OP_POP as u8) };
+        unsafe { consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.") };
+
+        unsafe { emitLoop(loopStart) };
+        loopStart = incrementStart;
+        unsafe { patchJump(bodyJump) };
+    }
+//< for-increment
+
+    unsafe { statement() };
+    unsafe { emitLoop(loopStart) };
+//> exit-jump
+
+    if exitJump != -1 {
+        unsafe { patchJump(exitJump) };
+        unsafe { emitByte(OP_POP as u8) }; // Condition.
+    }
+
+//< exit-jump
+//> for-end-scope
+    unsafe { endScope() };
+//< for-end-scope
+}
+//< Jumping Back and Forth for-statement
+//> Jumping Back and Forth if-statement
+unsafe fn ifStatement() {
+    unsafe { consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.") };
+    unsafe { expression() };
+    unsafe { consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.") }; // [paren]
+
+    let mut thenJump: isize = unsafe { emitJump(OP_JUMP_IF_FALSE) };
+//> pop-then
+    unsafe { emitByte(OP_POP as u8) };
+//< pop-then
+    unsafe { statement() };
+
+//> jump-over-else
+    let mut elseJump: isize = unsafe { emitJump(OP_JUMP) };
+
+//< jump-over-else
+    unsafe { patchJump(thenJump) };
+//> pop-end
+    unsafe { emitByte(OP_POP as u8) };
+//< pop-end
+//> compile-else
+
+    if unsafe { r#match(TOKEN_ELSE) } { unsafe { statement() }; }
+//< compile-else
+//> patch-else
+    unsafe { patchJump(elseJump) };
+//< patch-else
+}
+//< Jumping Back and Forth if-statement
 //> Global Variables print-statement
 unsafe fn printStatement() {
     unsafe { expression() };
@@ -761,6 +925,26 @@ unsafe fn printStatement() {
     unsafe { emitByte(OP_PRINT as u8) };
 }
 //< Global Variables print-statement
+//> Jumping Back and Forth while-statement
+unsafe fn whileStatement() {
+//> loop-start
+    let mut loopStart: isize = unsafe { (*unsafe { currentChunk() }).count };
+//< loop-start
+    unsafe { consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.") };
+    unsafe { expression() };
+    unsafe { consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.") };
+
+    let mut exitJump: isize = unsafe { emitJump(OP_JUMP_IF_FALSE) };
+    unsafe { emitByte(OP_POP as u8) };
+    unsafe { statement() };
+//> loop
+    unsafe { emitLoop(loopStart) };
+//< loop
+
+    unsafe { patchJump(exitJump) };
+    unsafe { emitByte(OP_POP as u8) };
+}
+//< Jumping Back and Forth while-statement
 //> Global Variables synchronize
 unsafe fn synchronize() {
     unsafe { parser.panicMode = false };
@@ -807,6 +991,18 @@ unsafe fn declaration() {
 unsafe fn statement() {
     if unsafe { r#match(TOKEN_PRINT) } {
         unsafe { printStatement() };
+//> Jumping Back and Forth parse-for
+    } else if unsafe { r#match(TOKEN_FOR) } {
+        unsafe { forStatement() };
+//< Jumping Back and Forth parse-for
+//> Jumping Back and Forth parse-if
+    } else if unsafe { r#match(TOKEN_IF) } {
+        unsafe { ifStatement() };
+//< Jumping Back and Forth parse-if
+//> Jumping Back and Forth parse-while
+    } else if unsafe { r#match(TOKEN_WHILE) } {
+        unsafe { whileStatement() };
+//< Jumping Back and Forth parse-while
 //> Local Variables parse-block
     } else if unsafe { r#match(TOKEN_LEFT_BRACE) } {
         unsafe { beginScope() };

@@ -58,6 +58,16 @@ unsafe fn byteInstruction(mut name: &str, mut chunk: *mut Chunk,
     return offset + 2; // [debug]
 }
 //< Local Variables byte-instruction
+//> Jumping Back and Forth jump-instruction
+unsafe fn jumpInstruction(mut name: &str, mut sign: isize,
+        mut chunk: *mut Chunk, mut offset: isize) -> isize {
+    let mut jump: u16 = (unsafe { *(*chunk).code.offset(offset + 1) } as u16) << 8;
+    jump |= unsafe { *(*chunk).code.offset(offset + 2) } as u16;
+    print!("{:<16} {:4} -> {}\n", name, offset,
+        offset + 3 + sign * jump as isize);
+    return offset + 3;
+}
+//< Jumping Back and Forth jump-instruction
 //> disassemble-instruction
 pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -> isize {
     print!("{:04} ", offset);
@@ -136,6 +146,16 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_PRINT =>
             simpleInstruction("OP_PRINT", offset),
 //< Global Variables disassemble-print
+//> Jumping Back and Forth disassemble-jump
+        OP_JUMP =>
+            unsafe { jumpInstruction("OP_JUMP", 1, chunk, offset) },
+        OP_JUMP_IF_FALSE =>
+            unsafe { jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset) },
+//< Jumping Back and Forth disassemble-jump
+//> Jumping Back and Forth disassemble-loop
+        OP_LOOP =>
+            unsafe { jumpInstruction("OP_LOOP", -1, chunk, offset) },
+//< Jumping Back and Forth disassemble-loop
         OP_RETURN =>
             simpleInstruction("OP_RETURN", offset),
         #[allow(unreachable_patterns)]
