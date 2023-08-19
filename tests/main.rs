@@ -120,3 +120,5 @@ mod compiling_expressions {
     case!(expressions__evaluate);
 }
 //< Compiling Expressions tests
+//> Types of Values tests
+//< Types of Values tests

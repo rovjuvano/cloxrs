@@ -1,5 +1,8 @@
 //> A Virtual Machine vm-c
 use ::core::mem::*;
+//> Types of Values include-stdarg
+use ::std::io::*;
+//< Types of Values include-stdarg
 //> vm-include-stdio
 use ::std::*;
 
@@ -44,7 +47,9 @@ pub enum InterpretResult {
     #[allow(dead_code)]
 */
     INTERPRET_COMPILE_ERROR,
+/* A Virtual Machine interpret-result < Types of Values op-negate
     #[allow(dead_code)]
+*/
     INTERPRET_RUNTIME_ERROR,
 }
 pub use InterpretResult::*;
@@ -70,6 +75,16 @@ unsafe fn resetStack() {
     unsafe { vm.stackTop = unsafe { &mut vm.stack } as *mut Value };
 }
 //< reset-stack
+//> Types of Values runtime-error
+unsafe fn runtimeError(mut format: fmt::Arguments<'_>) {
+    write!(&mut stderr(), "{}\n", format).unwrap();
+
+    let mut instruction: isize = unsafe { vm.ip.offset_from(unsafe { (*vm.chunk).code }) } - 1;
+    let mut line: isize = unsafe { *(*vm.chunk).lines.offset(instruction) };
+    eprint!("[line {}] in script\n", line);
+    unsafe { resetStack() };
+}
+//< Types of Values runtime-error
 
 pub unsafe fn initVM() {
 //> call-reset-stack
@@ -88,9 +103,24 @@ pub unsafe fn push(mut value: Value) {
 //> pop
 pub unsafe fn pop() -> Value {
     unsafe { vm.stackTop = unsafe { vm.stackTop.offset(-1) } };
+/* A Virtual Machine pop < Types of Values value-type
     return unsafe { *vm.stackTop };
+*/
+//> Types of Values value-type
+    return unsafe { (*vm.stackTop).clone() };
+//< Types of Values value-type
 }
 //< pop
+//> Types of Values peek
+unsafe fn peek(mut distance: isize) -> Value {
+    return unsafe { (*vm.stackTop.offset(-1 - distance)).clone() };
+}
+//< Types of Values peek
+//> Types of Values is-falsey
+fn isFalsey(mut value: Value) -> bool {
+    return IS_NIL!(value) || (IS_BOOL!(value) && !unsafe { AS_BOOL!(value) });
+}
+//< Types of Values is-falsey
 //> run
 /* Scanning on Demand vm-interpret-c < Compiling Expressions interpret-chunk
 #[allow(dead_code)]
@@ -106,11 +136,18 @@ unsafe fn run() -> InterpretResult {
 //> read-constant
     macro_rules! READ_CONSTANT {
         () => {{
+//< read-constant
+/* A Virtual Machine read-constant < Types of Values value-type
             unsafe { *(*vm.chunk).constants.values.offset(unsafe { READ_BYTE!() } as isize) }
+*/
+//> Types of Values value-type
+            unsafe { (*(*vm.chunk).constants.values.offset(unsafe { READ_BYTE!() as isize })).clone() }
+//< Types of Values value-type
+//> read-constant
         }};
     }
 //< read-constant
-//> binary-op
+/* A Virtual Machine binary-op < Types of Values binary-op
     macro_rules! BINARY_OP {
         ($op:tt) => {{
             let mut b: f64 = unsafe { pop() };
@@ -119,7 +156,21 @@ unsafe fn run() -> InterpretResult {
             unsafe { push(x) };
         }};
     }
-//< binary-op
+*/
+//> Types of Values binary-op
+    macro_rules! BINARY_OP {
+        ($valueType:ident, $op:tt) => {{
+            if !IS_NUMBER!(unsafe { peek(0) }) || !IS_NUMBER!(unsafe { peek(1) }) {
+                unsafe { runtimeError(format_args!("Operands must be numbers.")) };
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            let mut b: f64 = unsafe { AS_NUMBER!(unsafe { pop() }) };
+            let mut a: f64 = unsafe { AS_NUMBER!(unsafe { pop() }) };
+            let mut x: Value = $valueType!(a $op b);
+            unsafe { push(x) };
+        }};
+}
+//< Types of Values binary-op
 
     loop {
 //> trace-execution
@@ -130,7 +181,12 @@ unsafe fn run() -> InterpretResult {
             let mut slot: *mut Value = unsafe { &mut vm.stack } as *mut Value;
             while slot < unsafe { vm.stackTop } {
                 print!("[ ");
+/* A Virtual Machine trace-stack < Types of Values value-type
                 unsafe { printValue(unsafe { *slot }) };
+*/
+//> Types of Values value-type
+                unsafe { printValue(unsafe { (*slot).clone() }) };
+//< Types of Values value-type
                 print!(" ]");
                 slot = unsafe { slot.offset(1) };
             }
@@ -155,15 +211,51 @@ unsafe fn run() -> InterpretResult {
 //< push-constant
             }
 //< op-constant
-//> op-binary
+//> Types of Values interpret-literals
+            OP_NIL => unsafe { push(NIL_VAL!()) },
+            OP_TRUE => unsafe { push(BOOL_VAL!(true)) },
+            OP_FALSE => unsafe { push(BOOL_VAL!(false)) },
+//< Types of Values interpret-literals
+//> Types of Values interpret-equal
+            OP_EQUAL => {
+                let mut b: Value = unsafe { pop() };
+                let mut a: Value = unsafe { pop() };
+                unsafe { push(BOOL_VAL!(unsafe { valuesEqual(a, b) })) };
+            }
+//< Types of Values interpret-equal
+//> Types of Values interpret-comparison
+            OP_GREATER  => unsafe { BINARY_OP!(BOOL_VAL, >) },
+            OP_LESS     => unsafe { BINARY_OP!(BOOL_VAL, <) },
+//< Types of Values interpret-comparison
+/* A Virtual Machine op-binary < Types of Values op-arithmetic
             OP_ADD      => unsafe { BINARY_OP!(+) },
             OP_SUBTRACT => unsafe { BINARY_OP!(-) },
             OP_MULTIPLY => unsafe { BINARY_OP!(*) },
             OP_DIVIDE   => unsafe { BINARY_OP!(/) },
-//< op-binary
-//> op-negate
+*/
+/* A Virtual Machine op-negate < Types of Values op-negate
             OP_NEGATE   => unsafe { push(-unsafe { pop() }) },
-//< op-negate
+*/
+//> Types of Values op-arithmetic
+            OP_ADD      => unsafe { BINARY_OP!(NUMBER_VAL, +) },
+            OP_SUBTRACT => unsafe { BINARY_OP!(NUMBER_VAL, -) },
+            OP_MULTIPLY => unsafe { BINARY_OP!(NUMBER_VAL, *) },
+            OP_DIVIDE   => unsafe { BINARY_OP!(NUMBER_VAL, /) },
+//< Types of Values op-arithmetic
+//> Types of Values op-not
+            OP_NOT => {
+                unsafe { push(BOOL_VAL!(isFalsey(unsafe { pop() }))) };
+            }
+//< Types of Values op-not
+//> Types of Values op-negate
+            OP_NEGATE => {
+                if !IS_NUMBER!(unsafe { peek(0) }) {
+                    unsafe { runtimeError(format_args!("Operand must be a number.")) };
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                unsafe { push(NUMBER_VAL!(-unsafe { AS_NUMBER!(unsafe { pop() }) })) };
+            }
+//< Types of Values op-negate
             OP_RETURN => {
 //> print-return
                 unsafe { printValue(unsafe { pop() }) };

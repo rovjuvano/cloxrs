@@ -32,7 +32,12 @@ unsafe fn constantInstruction(mut name: &str, mut chunk: *mut Chunk,
         mut offset: isize) -> isize {
     let mut constant: u8 = unsafe { *(*chunk).code.offset(offset + 1) };
     print!("{:<16} {:4} '", name, constant);
+/* Chunks of Bytecode constant-instruction < Types of Values value-type
     unsafe { printValue(unsafe { *(*chunk).constants.values.offset(constant as isize) }) };
+*/
+//> Types of Values value-type
+    unsafe { printValue(unsafe { (*(*chunk).constants.values.offset(constant as isize)).clone() }) };
+//< Types of Values value-type
     print!("'\n");
 //> return-after-operand
     return offset + 2;
@@ -63,6 +68,22 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_CONSTANT =>
             unsafe { constantInstruction("OP_CONSTANT", chunk, offset) },
 //< disassemble-constant
+//> Types of Values disassemble-literals
+        OP_NIL =>
+            simpleInstruction("OP_NIL", offset),
+        OP_TRUE =>
+            simpleInstruction("OP_TRUE", offset),
+        OP_FALSE =>
+            simpleInstruction("OP_FALSE", offset),
+//< Types of Values disassemble-literals
+//> Types of Values disassemble-comparison
+        OP_EQUAL =>
+            simpleInstruction("OP_EQUAL", offset),
+        OP_GREATER =>
+            simpleInstruction("OP_GREATER", offset),
+        OP_LESS =>
+            simpleInstruction("OP_LESS", offset),
+//< Types of Values disassemble-comparison
 //> A Virtual Machine disassemble-binary
         OP_ADD =>
             simpleInstruction("OP_ADD", offset),
@@ -72,6 +93,10 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
             simpleInstruction("OP_MULTIPLY", offset),
         OP_DIVIDE =>
             simpleInstruction("OP_DIVIDE", offset),
+//> Types of Values disassemble-not
+        OP_NOT =>
+            simpleInstruction("OP_NOT", offset),
+//< Types of Values disassemble-not
 //< A Virtual Machine disassemble-binary
 //> A Virtual Machine disassemble-negate
         OP_NEGATE =>

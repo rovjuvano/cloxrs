@@ -60,9 +60,13 @@ enum Precedence {
     PREC_OR,          // or
     #[allow(dead_code)]
     PREC_AND,         // and
+/* Compiling Expressions precedence < Types of Values table-equal
     #[allow(dead_code)]
+*/
     PREC_EQUALITY,    // == !=
+/* Compiling Expressions precedence < Types of Values table-comparisons
     #[allow(dead_code)]
+*/
     PREC_COMPARISON,  // < > <= >=
     PREC_TERM,        // + -
     PREC_FACTOR,      // * /
@@ -210,6 +214,14 @@ unsafe fn binary() {
     unsafe { parsePrecedence(unsafe { transmute::<u8, Precedence>(unsafe { (*rule).precedence.clone() } as u8 + 1) }) };
 
     match operatorType {
+//> Types of Values comparison-operators
+        TOKEN_BANG_EQUAL    => unsafe { emitBytes(OP_EQUAL as u8, OP_NOT as u8) },
+        TOKEN_EQUAL_EQUAL   => unsafe { emitByte(OP_EQUAL as u8) },
+        TOKEN_GREATER       => unsafe { emitByte(OP_GREATER as u8) },
+        TOKEN_GREATER_EQUAL => unsafe { emitBytes(OP_LESS as u8, OP_NOT as u8) },
+        TOKEN_LESS          => unsafe { emitByte(OP_LESS as u8) },
+        TOKEN_LESS_EQUAL    => unsafe { emitBytes(OP_GREATER as u8, OP_NOT as u8) },
+//< Types of Values comparison-operators
         TOKEN_PLUS          => unsafe { emitByte(OP_ADD as u8) },
         TOKEN_MINUS         => unsafe { emitByte(OP_SUBTRACT as u8) },
         TOKEN_STAR          => unsafe { emitByte(OP_MULTIPLY as u8) },
@@ -218,6 +230,16 @@ unsafe fn binary() {
     }
 }
 //< Compiling Expressions binary
+//> Types of Values parse-literal
+unsafe fn literal() {
+    match unsafe { parser.previous.r#type.clone() } {
+        TOKEN_FALSE => unsafe { emitByte(OP_FALSE as u8) },
+        TOKEN_NIL => unsafe { emitByte(OP_NIL as u8) },
+        TOKEN_TRUE => unsafe { emitByte(OP_TRUE as u8) },
+        _ => {} // Unreachable.
+    }
+}
+//< Types of Values parse-literal
 //> Compiling Expressions grouping
 unsafe fn grouping() {
     unsafe { expression() };
@@ -227,7 +249,12 @@ unsafe fn grouping() {
 //> Compiling Expressions number
 unsafe fn number() {
     let mut value: f64 = unsafe { str_from_raw_parts!(unsafe { parser.previous.start }, unsafe { parser.previous.length }) }.parse::<f64>().unwrap();
+/* Compiling Expressions number < Types of Values const-number-val
     unsafe { emitConstant(value) };
+*/
+//> Types of Values const-number-val
+    unsafe { emitConstant(NUMBER_VAL!(value)) };
+//< Types of Values const-number-val
 }
 //< Compiling Expressions number
 //> Compiling Expressions unary
@@ -244,6 +271,9 @@ unsafe fn unary() {
 
     // Emit the operator instruction.
     match operatorType {
+//> Types of Values compile-not
+        TOKEN_BANG => unsafe { emitByte(OP_NOT as u8) },
+//< Types of Values compile-not
         TOKEN_MINUS => unsafe { emitByte(OP_NEGATE as u8) },
         _ => {} // Unreachable.
     }
@@ -280,31 +310,65 @@ static mut rules: ParseRules = parse_rules!{
     [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
     [TOKEN_SLASH]         = {NULL,     binary, PREC_FACTOR},
     [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
+/* Compiling Expressions rules < Types of Values table-not
     [TOKEN_BANG]          = {NULL,     NULL,   PREC_NONE},
+*/
+//> Types of Values table-not
+    [TOKEN_BANG]          = {unary,    NULL,   PREC_NONE},
+//< Types of Values table-not
+/* Compiling Expressions rules < Types of Values table-equal
     [TOKEN_BANG_EQUAL]    = {NULL,     NULL,   PREC_NONE},
+*/
+//> Types of Values table-equal
+    [TOKEN_BANG_EQUAL]    = {NULL,     binary, PREC_EQUALITY},
+//< Types of Values table-equal
     [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
+/* Compiling Expressions rules < Types of Values table-comparisons
     [TOKEN_EQUAL_EQUAL]   = {NULL,     NULL,   PREC_NONE},
     [TOKEN_GREATER]       = {NULL,     NULL,   PREC_NONE},
     [TOKEN_GREATER_EQUAL] = {NULL,     NULL,   PREC_NONE},
     [TOKEN_LESS]          = {NULL,     NULL,   PREC_NONE},
     [TOKEN_LESS_EQUAL]    = {NULL,     NULL,   PREC_NONE},
+*/
+//> Types of Values table-comparisons
+    [TOKEN_EQUAL_EQUAL]   = {NULL,     binary, PREC_EQUALITY},
+    [TOKEN_GREATER]       = {NULL,     binary, PREC_COMPARISON},
+    [TOKEN_GREATER_EQUAL] = {NULL,     binary, PREC_COMPARISON},
+    [TOKEN_LESS]          = {NULL,     binary, PREC_COMPARISON},
+    [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
+//< Types of Values table-comparisons
     [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
     [TOKEN_STRING]        = {NULL,     NULL,   PREC_NONE},
     [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
     [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
     [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
+/* Compiling Expressions rules < Types of Values table-false
     [TOKEN_FALSE]         = {NULL,     NULL,   PREC_NONE},
+*/
+//> Types of Values table-false
+    [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
+//< Types of Values table-false
     [TOKEN_FOR]           = {NULL,     NULL,   PREC_NONE},
     [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
     [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
+/* Compiling Expressions rules < Types of Values table-nil
     [TOKEN_NIL]           = {NULL,     NULL,   PREC_NONE},
+*/
+//> Types of Values table-nil
+    [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
+//< Types of Values table-nil
     [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
     [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
     [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
+/* Compiling Expressions rules < Types of Values table-true
     [TOKEN_TRUE]          = {NULL,     NULL,   PREC_NONE},
+*/
+//> Types of Values table-true
+    [TOKEN_TRUE]          = {literal,  NULL,   PREC_NONE},
+//< Types of Values table-true
     [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
     [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},

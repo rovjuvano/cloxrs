@@ -17,6 +17,16 @@ pub enum OpCode {
 //> op-constant
     OP_CONSTANT,
 //< op-constant
+//> Types of Values literal-ops
+    OP_NIL,
+    OP_TRUE,
+    OP_FALSE,
+//< Types of Values literal-ops
+//> Types of Values comparison-ops
+    OP_EQUAL,
+    OP_GREATER,
+    OP_LESS,
+//< Types of Values comparison-ops
 //> A Virtual Machine binary-ops
     OP_ADD,
 /* A Virtual Machine binary-ops < Compiling Expressions binary
@@ -28,6 +38,9 @@ pub enum OpCode {
 */
     OP_MULTIPLY,
     OP_DIVIDE,
+//> Types of Values not-op
+    OP_NOT,
+//< Types of Values not-op
 //< A Virtual Machine binary-ops
 //> A Virtual Machine negate-op
     OP_NEGATE,
