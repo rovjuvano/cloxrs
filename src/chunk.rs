@@ -8,9 +8,9 @@ pub use crate::value::*;
 //< chunk-h-include-value
 //> op-enum
 
-//> Scanning on Demand args
+/* Scanning on Demand args < Compiling Expressions emit-return
 #[allow(dead_code)]
-//< Scanning on Demand args
+*/
 #[derive(Clone)] // Copy, Eq, Ord too but made explicit
 #[repr(u8)]
 pub enum OpCode {
@@ -19,9 +19,13 @@ pub enum OpCode {
 //< op-constant
 //> A Virtual Machine binary-ops
     OP_ADD,
+/* A Virtual Machine binary-ops < Compiling Expressions binary
     #[allow(dead_code)]
+*/
     OP_SUBTRACT,
+/* A Virtual Machine binary-ops < Compiling Expressions binary
     #[allow(dead_code)]
+*/
     OP_MULTIPLY,
     OP_DIVIDE,
 //< A Virtual Machine binary-ops
@@ -82,9 +86,9 @@ pub unsafe fn initChunk(mut chunk: *mut Chunk) {
 //< chunk-init-constant-array
 }
 //> free-chunk
-//> Scanning on Demand args
+/* Scanning on Demand args < Compiling Expressions interpret-chunk
 #[allow(dead_code)]
-//< Scanning on Demand args
+*/
 pub unsafe fn freeChunk(mut chunk: *mut Chunk) {
     let _ = unsafe { FREE_ARRAY!(u8, unsafe { (*chunk).code }, unsafe { (*chunk).capacity }) };
 //> chunk-free-lines
@@ -101,9 +105,9 @@ pub unsafe fn writeChunk(mut chunk: *mut Chunk, mut byte: u8) {
 */
 //> write-chunk
 //> write-chunk-with-line
-//> Scanning on Demand args
+/* Scanning on Demand args < Compiling Expressions emit-byte
 #[allow(dead_code)]
-//< Scanning on Demand args
+*/
 pub unsafe fn writeChunk(mut chunk: *mut Chunk, mut byte: u8, mut line: isize) {
 //< write-chunk-with-line
     if unsafe { (*chunk).capacity } < unsafe { (*chunk).count } + 1 {
@@ -123,9 +127,9 @@ pub unsafe fn writeChunk(mut chunk: *mut Chunk, mut byte: u8, mut line: isize) {
 }
 //< write-chunk
 //> add-constant
-//> Scanning on Demand args
+/* Scanning on Demand args < Compiling Expressions make-constant
 #[allow(dead_code)]
-//< Scanning on Demand args
+*/
 pub unsafe fn addConstant(mut chunk: *mut Chunk, mut value: Value) -> isize {
     unsafe { writeValueArray(unsafe { &mut (*chunk).constants } as *mut ValueArray, value) };
     return unsafe { (*chunk).constants.count } - 1;

@@ -102,6 +102,8 @@ macro_rules! case {
     };
 }
 use case;
+//< Scanning on Demand tests
+/* Scanning on Demand tests < Compiling Expressions tests
 mod scanning_on_demand {
     use super::case;
     case!(scanning__identifiers);
@@ -111,4 +113,10 @@ mod scanning_on_demand {
     case!(scanning__strings);
     case!(scanning__whitespace);
 }
-//< Scanning on Demand tests
+*/
+//> Compiling Expressions tests
+mod compiling_expressions {
+    use super::case;
+    case!(expressions__evaluate);
+}
+//< Compiling Expressions tests

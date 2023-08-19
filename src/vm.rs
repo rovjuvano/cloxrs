@@ -40,7 +40,9 @@ pub struct VM {
 #[repr(u8)]
 pub enum InterpretResult {
     INTERPRET_OK,
+/* A Virtual Machine interpret-result < Compiling Expressions interpret-chunk
     #[allow(dead_code)]
+*/
     INTERPRET_COMPILE_ERROR,
     #[allow(dead_code)]
     INTERPRET_RUNTIME_ERROR,
@@ -90,9 +92,9 @@ pub unsafe fn pop() -> Value {
 }
 //< pop
 //> run
-//> Scanning on Demand vm-interpret-c
+/* Scanning on Demand vm-interpret-c < Compiling Expressions interpret-chunk
 #[allow(dead_code)]
-//< Scanning on Demand vm-interpret-c
+*/
 unsafe fn run() -> InterpretResult {
     macro_rules! READ_BYTE {
         () => {{
@@ -193,8 +195,29 @@ pub fn interpret(mut chunk: *mut Chunk) -> InterpretResult {
 */
 //> Scanning on Demand vm-interpret-c
 pub unsafe fn interpret(mut source: *const u8) -> InterpretResult {
+/* Scanning on Demand vm-interpret-c < Compiling Expressions interpret-chunk
     unsafe { compile(source) };
     return INTERPRET_OK;
+*/
+//> Compiling Expressions interpret-chunk
+    let mut chunk: Chunk = unsafe { uninit::<Chunk>() };
+    unsafe { initChunk(&mut chunk as *mut Chunk) };
+
+    if !unsafe { compile(source, &mut chunk as *mut Chunk) } {
+        unsafe { freeChunk(&mut chunk as *mut Chunk) };
+        return INTERPRET_COMPILE_ERROR;
+    }
+
+    unsafe { vm.chunk = &mut chunk as *mut Chunk };
+    unsafe { vm.ip = unsafe { (*vm.chunk).code } };
+//< Compiling Expressions interpret-chunk
 //< Scanning on Demand vm-interpret-c
+//> Compiling Expressions interpret-chunk
+
+    let mut result: InterpretResult = unsafe { run() };
+
+    unsafe { freeChunk(&mut chunk as *mut Chunk) };
+    return result;
+//< Compiling Expressions interpret-chunk
 }
 //< interpret

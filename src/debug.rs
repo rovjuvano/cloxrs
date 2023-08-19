@@ -13,9 +13,12 @@ pub use crate::chunk::*;
 use crate::value::*;
 //< debug-include-value
 
-//> Scanning on Demand args
+/* Scanning on Demand args < Compiling Expressions dump-chunk
 #[allow(dead_code)]
-//< Scanning on Demand args
+*/
+//> Compiling Expressions dump-chunk
+#[cfg_attr(not(DEBUG_PRINT_CODE), allow(dead_code))]
+//< Compiling Expressions dump-chunk
 pub unsafe fn disassembleChunk(mut chunk: *mut Chunk, mut name: &str) {
     print!("== {} ==\n", name);
 
