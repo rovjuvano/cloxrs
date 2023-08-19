@@ -97,9 +97,19 @@ pub struct VM {
 //> Closures open-upvalues-field
     pub openUpvalues: *mut ObjUpvalue,
 //< Closures open-upvalues-field
+//> Garbage Collection vm-fields
+
+    pub bytesAllocated: usize,
+    pub nextGC: usize,
+//< Garbage Collection vm-fields
 //> Strings objects-root
     pub objects: *mut Obj,
 //< Strings objects-root
+//> Garbage Collection vm-gray-stack
+    pub grayCount: isize,
+    pub grayCapacity: isize,
+    pub grayStack: *mut *mut Obj,
+//< Garbage Collection vm-gray-stack
 }
 
 //> interpret-result
@@ -212,6 +222,16 @@ pub unsafe fn initVM() {
 //> Strings init-objects-root
     unsafe { vm.objects = null_mut() };
 //< Strings init-objects-root
+//> Garbage Collection init-gc-fields
+    unsafe { vm.bytesAllocated = 0 };
+    unsafe { vm.nextGC = 1024 * 1024 };
+//< Garbage Collection init-gc-fields
+//> Garbage Collection init-gray-stack
+
+    unsafe { vm.grayCount = 0 };
+    unsafe { vm.grayCapacity = 0 };
+    unsafe { vm.grayStack = null_mut() };
+//< Garbage Collection init-gray-stack
 //> Global Variables init-globals
 
     unsafe { initTable(unsafe { &mut vm.globals } as *mut Table) };
@@ -377,8 +397,14 @@ fn isFalsey(mut value: Value) -> bool {
 //< Types of Values is-falsey
 //> Strings concatenate
 unsafe fn concatenate() {
+/* Strings concatenate < Garbage Collection concatenate-peek
     let mut b: *mut ObjString = unsafe { AS_STRING!(unsafe { pop() }) };
     let mut a: *mut ObjString = unsafe { AS_STRING!(unsafe { pop() }) };
+*/
+//> Garbage Collection concatenate-peek
+    let mut b: *mut ObjString = unsafe { AS_STRING!(unsafe { peek(0) }) };
+    let mut a: *mut ObjString = unsafe { AS_STRING!(unsafe { peek(1) }) };
+//< Garbage Collection concatenate-peek
 
     let mut length: isize = unsafe { (*a).length } + unsafe { (*b).length };
     let mut chars: *mut u8 = unsafe { ALLOCATE!(u8, (length + 1) as usize) };
@@ -387,6 +413,10 @@ unsafe fn concatenate() {
     unsafe { *chars.offset(length) = b'\0' };
 
     let mut result: *mut ObjString = unsafe { takeString(chars, length) };
+//> Garbage Collection concatenate-pop
+    let _ = unsafe { pop() };
+    let _ = unsafe { pop() };
+//< Garbage Collection concatenate-pop
     unsafe { push(OBJ_VAL!(result)) };
 }
 //< Strings concatenate

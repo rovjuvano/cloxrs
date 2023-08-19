@@ -2,7 +2,9 @@
 use ::core::ptr::*;
 
 use crate::memory::*;
+/* Hash Tables table-c < Garbage Collection mark-table
 #[allow(unused_imports)]
+*/
 use crate::object::*;
 //> Hash Tables table-h
 pub use crate::common::*;
@@ -43,6 +45,13 @@ pub struct Table {
 //> table-find-string-h
 // no need to forward declare tableFindString
 //< table-find-string-h
+//> Garbage Collection table-remove-white-h
+
+// no need to forward declare tableRemoveWhite
+//< Garbage Collection table-remove-white-h
+//> Garbage Collection mark-table-h
+// no need to forward declare markTable
+//< Garbage Collection mark-table-h
 //< init-table-h
 //< Hash Tables table-h
 #[allow(unused_imports)]
@@ -220,3 +229,22 @@ pub unsafe fn tableFindString(mut table: *mut Table, mut chars: *const u8,
     }
 }
 //< table-find-string
+//> Garbage Collection table-remove-white
+pub unsafe fn tableRemoveWhite(mut table: *mut Table) {
+    for mut i in 0..unsafe { (*table).capacity } {
+        let mut entry: *mut Entry = unsafe { (*table).entries.offset(i) };
+        if !unsafe { (*entry).key }.is_null() && !unsafe { (*(*entry).key).obj.isMarked } {
+            let _ = unsafe { tableDelete(table, unsafe { (*entry).key }) };
+        }
+    }
+}
+//< Garbage Collection table-remove-white
+//> Garbage Collection mark-table
+pub unsafe fn markTable(mut table: *mut Table) {
+    for mut i in 0..unsafe { (*table).capacity } {
+        let mut entry: *mut Entry = unsafe { (*table).entries.offset(i) };
+        unsafe { markObject(unsafe { (*entry).key } as *mut Obj) };
+        unsafe { markValue(unsafe { (*entry).value.clone() }) };
+    }
+}
+//< Garbage Collection mark-table

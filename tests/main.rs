@@ -304,3 +304,5 @@ mod closures {
     case!(while__return_closure);
 }
 //< Closures tests
+//> Garbage Collection tests
+//< Garbage Collection tests

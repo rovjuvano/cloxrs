@@ -1,8 +1,14 @@
 //> Chunks of Bytecode memory-c
 use ::alloc::alloc::*;
+//> Garbage Collection add-to-gray-stack
+use ::core::mem::*;
+//< Garbage Collection add-to-gray-stack
 use ::core::ptr::*;
 use ::std::process::*;
 
+//> Garbage Collection memory-include-compiler
+use crate::compiler::*;
+//< Garbage Collection memory-include-compiler
 //> Chunks of Bytecode memory-h
 pub use crate::common::*;
 //> Strings memory-include-object
@@ -60,15 +66,58 @@ pub(crate) use FREE_ARRAY;
 
 // no need to forward declare reallocate
 //< grow-array
+//> Garbage Collection mark-object-h
+// no need to forward declare markObject
+//< Garbage Collection mark-object-h
+//> Garbage Collection mark-value-h
+// no need to forward declare markValue
+//< Garbage Collection mark-value-h
+//> Garbage Collection collect-garbage-h
+// no need to forward declare collectGarbage
+//< Garbage Collection collect-garbage-h
 //> Strings free-objects-h
 // no need to forward declare freeObjects
 //< Strings free-objects-h
 //< Chunks of Bytecode memory-h
 //> Strings memory-include-vm
+//> Garbage Collection memory-include-compiler
+#[allow(unused_imports)]
+//< Garbage Collection memory-include-compiler
 use crate::vm::*;
 //< Strings memory-include-vm
+//> Garbage Collection debug-log-includes
+
+#[cfg(DEBUG_LOG_GC)]
+use ::std::*;
+#[cfg(DEBUG_LOG_GC)]
+#[allow(unused_imports)]
+use crate::debug::*;
+//< Garbage Collection debug-log-includes
+//> Garbage Collection heap-grow-factor
+
+const GC_HEAP_GROW_FACTOR: usize = 2;
+//< Garbage Collection heap-grow-factor
 
 pub unsafe fn reallocate(mut pointer: *mut u8, mut oldSize: usize, mut newSize: usize) -> *mut u8 {
+//> Garbage Collection updated-bytes-allocated
+    unsafe {
+        vm.bytesAllocated -= oldSize;
+        vm.bytesAllocated += newSize;
+    };
+//< Garbage Collection updated-bytes-allocated
+//> Garbage Collection call-collect
+    if newSize > oldSize {
+        #[cfg(DEBUG_STRESS_GC)]
+        unsafe { collectGarbage() };
+//> collect-on-next
+
+        if unsafe { vm.bytesAllocated } > unsafe { vm.nextGC } {
+            unsafe { collectGarbage() };
+        }
+//< collect-on-next
+    }
+
+//< Garbage Collection call-collect
     let mut layout: Layout = Layout::array::<u8>(oldSize).unwrap();
     if newSize == 0 {
         unsafe { dealloc(pointer, layout) };
@@ -81,8 +130,98 @@ pub unsafe fn reallocate(mut pointer: *mut u8, mut oldSize: usize, mut newSize: 
 //< out-of-memory
     return result;
 }
+//> Garbage Collection mark-object
+pub unsafe fn markObject(mut object: *mut Obj) {
+    if object.is_null() { return; }
+//> check-is-marked
+    if unsafe { (*object).isMarked } { return; }
+
+//< check-is-marked
+//> log-mark-object
+    #[cfg(DEBUG_LOG_GC)]
+    {
+        print!("{:p} mark ", object);
+        unsafe { printValue(OBJ_VAL!(object)) };
+        print!("\n");
+    }
+
+//< log-mark-object
+    unsafe { (*object).isMarked = true };
+//> add-to-gray-stack
+
+    if unsafe { vm.grayCapacity } < unsafe { vm.grayCount } + 1 {
+        let mut layout: Layout = Layout::array::<*mut Obj>(unsafe { vm.grayCapacity } as usize).unwrap();
+        unsafe { vm.grayCapacity = GROW_CAPACITY!(unsafe { vm.grayCapacity }) };
+        let mut newSize: usize = size_of::<*mut Obj>() * unsafe { vm.grayCapacity } as usize;
+        unsafe { vm.grayStack = realloc(unsafe { vm.grayStack } as *mut u8, layout, newSize) as *mut *mut Obj };
+//> exit-gray-stack
+
+        if unsafe { vm.grayStack }.is_null() { exit(1) };
+//< exit-gray-stack
+    }
+
+    unsafe { *vm.grayStack.offset(unsafe { vm.grayCount }) = object };
+    unsafe { vm.grayCount += 1; }
+//< add-to-gray-stack
+}
+//< Garbage Collection mark-object
+//> Garbage Collection mark-value
+pub unsafe fn markValue(mut value: Value) {
+    if IS_OBJ!(value) { unsafe { markObject(unsafe { AS_OBJ!(value) }) }; }
+}
+//< Garbage Collection mark-value
+//> Garbage Collection mark-array
+unsafe fn markArray(mut array: *mut ValueArray) {
+    for mut i in 0..unsafe { (*array).count } {
+        unsafe { markValue(unsafe { (*(*array).values.offset(i)).clone() }) };
+    }
+}
+//< Garbage Collection mark-array
+//> Garbage Collection blacken-object
+unsafe fn blackenObject(mut object: *mut Obj) {
+//> log-blacken-object
+    #[cfg(DEBUG_LOG_GC)]
+    {
+        print!("{:p} blacken ", object);
+        unsafe { printValue(OBJ_VAL!(object)) };
+        print!("\n");
+    }
+
+//< log-blacken-object
+    match unsafe { (*object).r#type.clone() } {
+//> blacken-closure
+        OBJ_CLOSURE => {
+            let mut closure: *mut ObjClosure = object as *mut ObjClosure;
+            unsafe { markObject(unsafe { (*closure).function } as *mut Obj) };
+            for mut i in 0..unsafe { (*closure).upvalueCount } {
+                unsafe { markObject(unsafe { *(*closure).upvalues.offset(i) } as *mut Obj) };
+            }
+        }
+//< blacken-closure
+//> blacken-function
+        OBJ_FUNCTION => {
+            let mut function: *mut ObjFunction = object as *mut ObjFunction;
+            unsafe { markObject(unsafe { (*function).name } as *mut Obj) };
+            unsafe { markArray(unsafe { &mut (*function).chunk.constants } as *mut ValueArray) };
+        }
+//< blacken-function
+//> blacken-upvalue
+        OBJ_UPVALUE => {
+            unsafe { markValue(unsafe { (*(object as *mut ObjUpvalue)).closed.clone() }) };
+        }
+//< blacken-upvalue
+        OBJ_NATIVE => {}
+        OBJ_STRING => {}
+    }
+}
+//< Garbage Collection blacken-object
 //> Strings free-object
 unsafe fn freeObject(mut object: *mut Obj) {
+//> Garbage Collection log-free-object
+    #[cfg(DEBUG_LOG_GC)]
+    print!("{:p} free type {}\n", object, unsafe { (*object).r#type.clone() } as u8);
+
+//< Garbage Collection log-free-object
     match unsafe { (*object).r#type.clone() } {
 //> Closures free-closure
         OBJ_CLOSURE => {
@@ -119,6 +258,110 @@ unsafe fn freeObject(mut object: *mut Obj) {
     }
 }
 //< Strings free-object
+//> Garbage Collection mark-roots
+unsafe fn markRoots() {
+    let mut slot: *mut Value = unsafe { &mut vm.stack } as *mut Value;
+    while slot < unsafe { vm.stackTop } {
+        unsafe { markValue(unsafe { (*slot).clone() }) };
+        slot = unsafe { slot.offset(1) };
+    }
+//> mark-closures
+
+    for mut i in 0..unsafe { vm.frameCount } {
+        unsafe { markObject(unsafe { vm.frames[i as usize].closure } as *mut Obj) };
+    }
+//< mark-closures
+//> mark-open-upvalues
+
+    let mut upvalue: *mut ObjUpvalue = unsafe { vm.openUpvalues };
+    while !upvalue.is_null() {
+        unsafe { markObject(upvalue as *mut Obj) };
+        upvalue = unsafe { (*upvalue).next };
+    }
+//< mark-open-upvalues
+//> mark-globals
+
+    unsafe { markTable(unsafe { &mut vm.globals } as *mut Table) };
+//< mark-globals
+//> call-mark-compiler-roots
+    unsafe { markCompilerRoots() };
+//< call-mark-compiler-roots
+}
+//< Garbage Collection mark-roots
+//> Garbage Collection trace-references
+unsafe fn traceReferences() {
+    while unsafe { vm.grayCount } > 0 {
+        unsafe { vm.grayCount -= 1 };
+        let mut object: *mut Obj = unsafe { *vm.grayStack.offset(unsafe { vm.grayCount }) };
+        unsafe { blackenObject(object) };
+    }
+}
+//< Garbage Collection trace-references
+//> Garbage Collection sweep
+unsafe fn sweep() {
+    let mut previous: *mut Obj = null_mut();
+    let mut object: *mut Obj = unsafe { vm.objects };
+    while !object.is_null() {
+        if unsafe { (*object).isMarked } {
+//> unmark
+            unsafe { (*object).isMarked = false };
+//< unmark
+            previous = object;
+            object = unsafe { (*object).next };
+        } else {
+            let mut unreached: *mut Obj = object;
+            object = unsafe { (*object).next };
+            if !previous.is_null() {
+                unsafe { (*previous).next = object };
+            } else {
+                unsafe { vm.objects = object };
+            }
+
+            unsafe { freeObject(unreached) };
+        }
+    }
+}
+//< Garbage Collection sweep
+//> Garbage Collection collect-garbage
+pub unsafe fn collectGarbage() {
+//> log-before-collect
+    #[cfg(DEBUG_LOG_GC)]
+    print!("-- gc begin\n");
+//> log-before-size
+    #[cfg(DEBUG_LOG_GC)]
+    let mut before: usize = unsafe { vm.bytesAllocated };
+//< log-before-size
+//< log-before-collect
+//> call-mark-roots
+
+    unsafe { markRoots() };
+//< call-mark-roots
+//> call-trace-references
+    unsafe { traceReferences() };
+//< call-trace-references
+//> sweep-strings
+    unsafe { tableRemoveWhite(unsafe { &mut vm.strings } as *mut Table) };
+//< sweep-strings
+//> call-sweep
+    unsafe { sweep() };
+//< call-sweep
+//> update-next-gc
+
+    unsafe { vm.nextGC = unsafe { vm.bytesAllocated } * GC_HEAP_GROW_FACTOR };
+//< update-next-gc
+//> log-after-collect
+
+    #[cfg(DEBUG_LOG_GC)]
+    print!("-- gc end\n");
+//> log-collected-amount
+    #[cfg(DEBUG_LOG_GC)]
+    print!("   collected {} bytes (from {} to {}) next at {}\n",
+        before - unsafe { vm.bytesAllocated }, before,
+        unsafe { vm.bytesAllocated }, unsafe { vm.nextGC });
+//< log-collected-amount
+//< log-after-collect
+}
+//< Garbage Collection collect-garbage
 //> Strings free-objects
 pub unsafe fn freeObjects() {
     let mut object: *mut Obj = unsafe { vm.objects };
@@ -127,5 +370,10 @@ pub unsafe fn freeObjects() {
         unsafe { freeObject(object) };
         object = next;
     }
+//> Garbage Collection free-gray-stack
+
+    let mut layout: Layout = Layout::array::<*mut Obj>(unsafe { vm.grayCapacity as usize }).unwrap();
+    unsafe { dealloc(unsafe { vm.grayStack } as *mut u8, layout) };
+//< Garbage Collection free-gray-stack
 }
 //< Strings free-objects

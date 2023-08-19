@@ -34,7 +34,13 @@ pub use crate::vm::*;
 //> Calls and Functions compile-h
 // no need to forward declare compile
 //< Calls and Functions compile-h
+//> Garbage Collection mark-compiler-roots-h
+// no need to forward declare markCompilerRoots
+//< Garbage Collection mark-compiler-roots-h
 //< Scanning on Demand compiler-h
+//> Garbage Collection compiler-include-memory
+use crate::memory::*;
+//< Garbage Collection compiler-include-memory
 use crate::scanner::*;
 //> Compiling Expressions include-debug
 
@@ -1365,3 +1371,12 @@ pub unsafe fn compile(mut source: *const u8) -> *mut ObjFunction {
     return if unsafe { parser.hadError } { null_mut() } else { function };
 //< Calls and Functions call-end-compiler
 }
+//> Garbage Collection mark-compiler-roots
+pub unsafe fn markCompilerRoots() {
+    let mut compiler: *mut Compiler = unsafe { current };
+    while !compiler.is_null() {
+        unsafe { markObject(unsafe { (*compiler).function } as *mut Obj) };
+        compiler = unsafe { (*compiler).enclosing };
+    }
+}
+//< Garbage Collection mark-compiler-roots

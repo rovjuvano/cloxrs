@@ -10,6 +10,13 @@ use ::core::mem::MaybeUninit;
 //< Compiling Expressions define-debug-print-code
 // rustflags = "--cfg DEBUG_TRACE_EXECUTION"
 //< A Virtual Machine define-debug-trace
+//> Garbage Collection define-stress-gc
+
+// rustflags = "--cfg DEBUG_STRESS_GC"
+//< Garbage Collection define-stress-gc
+//> Garbage Collection define-log-gc
+// rustflags = "--cfg DEBUG_LOG_GC"
+//< Garbage Collection define-log-gc
 //> Local Variables uint8-count
 
 pub const UINT8_COUNT: isize = u8::MAX as isize + 1;

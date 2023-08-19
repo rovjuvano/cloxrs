@@ -26,6 +26,9 @@ pub(crate) use OBJ_TYPE;
 macro_rules! IS_CLOSURE {
     ($value:expr) => { isObjType($value.clone(), OBJ_CLOSURE) };
 }
+//> Garbage Collection glob-imports-gone-wild
+#[allow(unused_imports)]
+//< Garbage Collection glob-imports-gone-wild
 pub(crate) use IS_CLOSURE;
 //< Closures is-closure
 //> Calls and Functions is-function
@@ -33,6 +36,9 @@ pub(crate) use IS_CLOSURE;
 macro_rules! IS_FUNCTION {
     ($value:expr) => { isObjType($value.clone(), OBJ_FUNCTION) };
 }
+//> Garbage Collection glob-imports-gone-wild
+#[allow(unused_imports)]
+//< Garbage Collection glob-imports-gone-wild
 pub(crate) use IS_FUNCTION;
 //< Calls and Functions is-function
 //> Calls and Functions is-native
@@ -40,6 +46,9 @@ pub(crate) use IS_FUNCTION;
 macro_rules! IS_NATIVE {
     ($value:expr) => { isObjType($value.clone(), OBJ_NATIVE) };
 }
+//> Garbage Collection glob-imports-gone-wild
+#[allow(unused_imports)]
+//< Garbage Collection glob-imports-gone-wild
 pub(crate) use IS_NATIVE;
 //< Calls and Functions is-native
 macro_rules! IS_STRING {
@@ -118,6 +127,9 @@ pub use ObjType::*;
 #[repr(C)]
 pub struct Obj {
     pub r#type: ObjType,
+//> Garbage Collection is-marked-field
+    pub isMarked: bool,
+//< Garbage Collection is-marked-field
 //> next-field
     pub next: *mut Obj,
 //< next-field
@@ -236,11 +248,20 @@ macro_rules! ALLOCATE_OBJ {
 unsafe fn allocateObject(mut size: usize, mut r#type: ObjType) -> *mut Obj {
     let mut object: *mut Obj = unsafe { reallocate(null_mut(), 0, size) } as *mut Obj;
     unsafe { (*object).r#type = r#type.clone() };
+//> Garbage Collection init-is-marked
+    unsafe { (*object).isMarked = false };
+//< Garbage Collection init-is-marked
 //> add-to-list
 
     unsafe { (*object).next = unsafe { vm.objects } };
     unsafe { vm.objects = object };
 //< add-to-list
+//> Garbage Collection debug-log-allocate
+
+    #[cfg(DEBUG_LOG_GC)]
+    print!("{:p} allocate {} for {}\n", object, size, r#type as u8);
+
+//< Garbage Collection debug-log-allocate
     return object;
 }
 //< allocate-object
@@ -298,7 +319,15 @@ unsafe fn allocateString(mut chars: *mut u8, mut length: isize,
     unsafe { (*string).hash = hash };
 //< Hash Tables allocate-store-hash
 //> Hash Tables allocate-store-string
+//> Garbage Collection push-string
+
+    unsafe { push(OBJ_VAL!(string)) };
+//< Garbage Collection push-string
     let _ = unsafe { tableSet(unsafe { &mut vm.strings } as *mut Table, string, NIL_VAL!()) };
+//> Garbage Collection pop-string
+    let _ = unsafe { pop() };
+
+//< Garbage Collection pop-string
 //< Hash Tables allocate-store-string
     return string;
 }

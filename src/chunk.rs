@@ -129,6 +129,9 @@ pub struct Chunk {
 //> chunk-c-include-memory
 use crate::memory::*;
 //< chunk-c-include-memory
+//> Garbage Collection chunk-include-vm
+use crate::vm::*;
+//< Garbage Collection chunk-include-vm
 
 pub unsafe fn initChunk(mut chunk: *mut Chunk) {
     unsafe { (*chunk).count = 0 };
@@ -187,7 +190,13 @@ pub unsafe fn writeChunk(mut chunk: *mut Chunk, mut byte: u8, mut line: isize) {
 #[allow(dead_code)]
 */
 pub unsafe fn addConstant(mut chunk: *mut Chunk, mut value: Value) -> isize {
+//> Garbage Collection add-constant-push
+    unsafe { push(value.clone()) };
+//< Garbage Collection add-constant-push
     unsafe { writeValueArray(unsafe { &mut (*chunk).constants } as *mut ValueArray, value) };
+//> Garbage Collection add-constant-pop
+    let _ = unsafe { pop() };
+//< Garbage Collection add-constant-pop
     return unsafe { (*chunk).constants.count } - 1;
 }
 //< add-constant
