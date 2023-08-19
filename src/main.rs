@@ -34,6 +34,9 @@ mod object;
 //> Scanning on Demand scanner-h
 mod scanner;
 //< Scanning on Demand scanner-h
+//> Hash Tables table-h
+mod table;
+//< Hash Tables table-h
 //> value-h
 mod value;
 //< value-h

@@ -186,7 +186,7 @@ pub unsafe fn valuesEqual(mut a: Value, mut b: Value) -> bool {
         VAL_BOOL   => (unsafe { AS_BOOL!(a) } == unsafe { AS_BOOL!(b) }),
         VAL_NIL    => true,
         VAL_NUMBER => (unsafe { AS_NUMBER!(a) } == unsafe { AS_NUMBER!(b) }),
-//> Strings strings-equal
+/* Strings strings-equal < Hash Tables equal
         VAL_OBJ => {
             let mut aString: *mut ObjString = unsafe { AS_STRING!(a) };
             let mut bString: *mut ObjString = unsafe { AS_STRING!(b) };
@@ -194,7 +194,10 @@ pub unsafe fn valuesEqual(mut a: Value, mut b: Value) -> bool {
                 unsafe { memcmp(unsafe { (*aString).chars }, unsafe { (*bString).chars },
                     unsafe { (*aString).length } as usize) } == 0
         }
-//< Strings strings-equal
+*/
+//> Hash Tables equal
+        VAL_OBJ    => (unsafe { AS_OBJ!(a) } == unsafe { AS_OBJ!(b) }),
+//< Hash Tables equal
         #[allow(unreachable_patterns)]
         _ => false, // Unreachable.
     };

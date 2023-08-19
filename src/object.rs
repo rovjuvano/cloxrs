@@ -67,6 +67,9 @@ pub struct ObjString {
     pub obj: Obj,
     pub length: isize,
     pub chars: *mut u8,
+//> Hash Tables obj-string-hash
+    pub hash: u32,
+//< Hash Tables obj-string-hash
 }
 //< obj-string
 
@@ -87,6 +90,9 @@ pub fn isObjType(mut value: Value, mut r#type: ObjType) -> bool {
 }
 //< is-obj-type
 //< Strings object-h
+//> Hash Tables object-include-table
+use crate::table::*;
+//< Hash Tables object-include-table
 #[allow(unused_imports)]
 use crate::value::*;
 use crate::vm::*;
@@ -113,24 +119,75 @@ unsafe fn allocateObject(mut size: usize, mut r#type: ObjType) -> *mut Obj {
 }
 //< allocate-object
 
-//> allocate-string
+/* Strings allocate-string < Hash Tables allocate-string
 unsafe fn allocateString(mut chars: *mut u8, mut length: isize) -> *mut ObjString {
+*/
+//> allocate-string
+//> Hash Tables allocate-string
+unsafe fn allocateString(mut chars: *mut u8, mut length: isize,
+        mut hash: u32) -> *mut ObjString {
+//< Hash Tables allocate-string
     let mut string: *mut ObjString = unsafe { ALLOCATE_OBJ!(ObjString, OBJ_STRING) };
     unsafe { (*string).length = length };
     unsafe { (*string).chars = chars };
+//> Hash Tables allocate-store-hash
+    unsafe { (*string).hash = hash };
+//< Hash Tables allocate-store-hash
+//> Hash Tables allocate-store-string
+    let _ = unsafe { tableSet(unsafe { &mut vm.strings } as *mut Table, string, NIL_VAL!()) };
+//< Hash Tables allocate-store-string
     return string;
 }
 //< allocate-string
+//> Hash Tables hash-string
+unsafe fn hashString(mut key: *const u8, mut length: isize) -> u32 {
+    let mut hash: u32 = 2166136261u32;
+    for mut i in 0..length {
+        hash ^= unsafe { *key.offset(i) as u32 };
+        hash = u32::overflowing_mul(hash, 16777619).0;
+    }
+    return hash;
+}
+//< Hash Tables hash-string
 //> take-string
 pub unsafe fn takeString(mut chars: *mut u8, mut length: isize) -> *mut ObjString {
+/* Strings take-string < Hash Tables take-string-hash
     return unsafe { allocateString(chars, length) };
+*/
+//> Hash Tables take-string-hash
+    let mut hash: u32 = unsafe { hashString(chars as *const u8, length) };
+//> take-string-intern
+    let mut interned: *mut ObjString = unsafe { tableFindString(unsafe { &mut vm.strings } as *mut Table,
+        chars, length, hash) };
+    if !interned.is_null() {
+        let _ = unsafe { FREE_ARRAY!(u8, chars, length + 1) };
+        return interned;
+    }
+
+//< take-string-intern
+    return unsafe { allocateString(chars, length, hash) };
+//< Hash Tables take-string-hash
 }
 //< take-string
 pub unsafe fn copyString(mut chars: *const u8, mut length: isize) -> *mut ObjString {
+//> Hash Tables copy-string-hash
+    let mut hash: u32 = unsafe { hashString(chars, length) };
+//> copy-string-intern
+    let mut interned: *mut ObjString = unsafe { tableFindString(unsafe { &mut vm.strings } as *mut Table,
+        chars, length, hash) };
+    if !interned.is_null() { return interned; }
+
+//< copy-string-intern
+//< Hash Tables copy-string-hash
     let mut heapChars: *mut u8 = unsafe { ALLOCATE!(u8, (length + 1) as usize) };
     unsafe { copy_nonoverlapping(chars, heapChars, length as usize) };
     unsafe { *heapChars.offset(length) = b'\0' };
+/* Strings object-c < Hash Tables copy-string-allocate
     return unsafe { allocateString(heapChars, length) };
+*/
+//> Hash Tables copy-string-allocate
+    return unsafe { allocateString(heapChars, length, hash) };
+//< Hash Tables copy-string-allocate
 }
 //> print-object
 pub unsafe fn printObject(mut value: Value) {

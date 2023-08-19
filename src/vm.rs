@@ -29,6 +29,9 @@ use crate::memory::*;
 //< Strings vm-include-object-memory
 //> A Virtual Machine vm-h
 pub use crate::chunk::*;
+//> Hash Tables vm-include-table
+pub use crate::table::*;
+//< Hash Tables vm-include-table
 //> vm-include-value
 pub use crate::value::*;
 //< vm-include-value
@@ -47,6 +50,9 @@ pub struct VM {
     pub stack: [Value; STACK_MAX as usize],
     pub stackTop: *mut Value,
 //< vm-stack
+//> Hash Tables vm-strings
+    pub strings: Table,
+//< Hash Tables vm-strings
 //> Strings objects-root
     pub objects: *mut Obj,
 //< Strings objects-root
@@ -111,9 +117,15 @@ pub unsafe fn initVM() {
 //> Strings init-objects-root
     unsafe { vm.objects = null_mut() };
 //< Strings init-objects-root
+//> Hash Tables init-strings
+    unsafe { initTable(unsafe { &mut vm.strings } as *mut Table) };
+//< Hash Tables init-strings
 }
 
 pub unsafe fn freeVM() {
+//> Hash Tables free-strings
+    unsafe { freeTable(unsafe { &mut vm.strings } as *mut Table) };
+//< Hash Tables free-strings
 //> Strings call-free-objects
     unsafe { freeObjects() };
 //< Strings call-free-objects

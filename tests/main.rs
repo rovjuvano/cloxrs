@@ -124,3 +124,5 @@ mod compiling_expressions {
 //< Types of Values tests
 //> Strings tests
 //< Strings tests
+//> Hash Tables tests
+//< Hash Tables tests
