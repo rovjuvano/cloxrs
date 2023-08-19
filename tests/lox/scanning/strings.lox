@@ -1,0 +1,6 @@
+""
+"string"
+
+// expect:    1 20 '""'
+// expect:    2 20 '"string"'
+// expect:    7 39 ''

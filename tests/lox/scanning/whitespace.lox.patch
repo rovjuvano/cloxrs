@@ -1,0 +1,16 @@
+--- a/scanning/whitespace.lox	1970-01-01 00:00:00.000000000 +0000
++++ b/scanning/whitespace.lox	1970-01-01 00:00:00.000000000 +0000
+@@ -5,8 +5,8 @@
+ 
+ end
+ 
+-// expect: IDENTIFIER space null
+-// expect: IDENTIFIER tabs null
+-// expect: IDENTIFIER newlines null
+-// expect: IDENTIFIER end null
+-// expect: EOF  null
++// expect:    1 19 'space'
++// expect:    | 19 'tabs'
++// expect:    | 19 'newlines'
++// expect:    6 19 'end'
++// expect:   13 39 ''

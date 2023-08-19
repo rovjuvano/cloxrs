@@ -1,0 +1,37 @@
+--- a/scanning/keywords.lox	1970-01-01 00:00:00.000000000 +0000
++++ b/scanning/keywords.lox	1970-01-01 00:00:00.000000000 +0000
+@@ -1,18 +1,18 @@
+ and class else false for fun if nil or return super this true var while
+ 
+-// expect: AND and null
+-// expect: CLASS class null
+-// expect: ELSE else null
+-// expect: FALSE false null
+-// expect: FOR for null
+-// expect: FUN fun null
+-// expect: IF if null
+-// expect: NIL nil null
+-// expect: OR or null
+-// expect: RETURN return null
+-// expect: SUPER super null
+-// expect: THIS this null
+-// expect: TRUE true null
+-// expect: VAR var null
+-// expect: WHILE while null
+-// expect: EOF  null
++// expect:    1 22 'and'
++// expect:    | 23 'class'
++// expect:    | 24 'else'
++// expect:    | 25 'false'
++// expect:    | 26 'for'
++// expect:    | 27 'fun'
++// expect:    | 28 'if'
++// expect:    | 29 'nil'
++// expect:    | 30 'or'
++// expect:    | 32 'return'
++// expect:    | 33 'super'
++// expect:    | 34 'this'
++// expect:    | 35 'true'
++// expect:    | 36 'var'
++// expect:    | 37 'while'
++// expect:   19 39 ''

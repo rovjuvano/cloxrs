@@ -6,6 +6,9 @@ use ::std::*;
 //< vm-include-stdio
 #[allow(unused_imports)]
 use crate::common::*;
+//> Scanning on Demand vm-include-compiler
+use crate::compiler::*;
+//< Scanning on Demand vm-include-compiler
 //> vm-include-debug
 #[cfg_attr(not(DEBUG_TRACE_EXECUTION), allow(unused_imports))]
 use crate::debug::*;
@@ -47,9 +50,12 @@ pub use InterpretResult::*;
 //< interpret-result
 // no need to forward declare initVM
 // no need to forward declare freeVM
-//> interpret-h
+/* A Virtual Machine interpret-h < Scanning on Demand vm-interpret-h
 // no need to forward declare interpret
-//< interpret-h
+*/
+//> Scanning on Demand vm-interpret-h
+// no need to forward declare interpret
+//< Scanning on Demand vm-interpret-h
 //> push-pop
 // no need to forward declare push
 // no need to forward declare pop
@@ -84,6 +90,9 @@ pub unsafe fn pop() -> Value {
 }
 //< pop
 //> run
+//> Scanning on Demand vm-interpret-c
+#[allow(dead_code)]
+//< Scanning on Demand vm-interpret-c
 unsafe fn run() -> InterpretResult {
     macro_rules! READ_BYTE {
         () => {{
@@ -172,10 +181,20 @@ unsafe fn run() -> InterpretResult {
 //< undef-binary-op
 }
 //< run
+//> omit
+// no need for hack here - use `#[allow(dead_code)]`
+//< omit
 //> interpret
+/* A Virtual Machine interpret < Scanning on Demand vm-interpret-c
 pub fn interpret(mut chunk: *mut Chunk) -> InterpretResult {
     unsafe { vm.chunk = chunk };
     unsafe { vm.ip = unsafe { (*vm.chunk).code } };
     return unsafe { run() };
+*/
+//> Scanning on Demand vm-interpret-c
+pub unsafe fn interpret(mut source: *const u8) -> InterpretResult {
+    unsafe { compile(source) };
+    return INTERPRET_OK;
+//< Scanning on Demand vm-interpret-c
 }
 //< interpret

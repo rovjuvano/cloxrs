@@ -1,0 +1,24 @@
+--- a/scanning/identifiers.lox	1970-01-01 00:00:00.000000000 +0000
++++ b/scanning/identifiers.lox	1970-01-01 00:00:00.000000000 +0000
+@@ -1,12 +1,12 @@
+ andy formless fo _ _123 _abc ab123
+ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_
+ 
+-// expect: IDENTIFIER andy null
+-// expect: IDENTIFIER formless null
+-// expect: IDENTIFIER fo null
+-// expect: IDENTIFIER _ null
+-// expect: IDENTIFIER _123 null
+-// expect: IDENTIFIER _abc null
+-// expect: IDENTIFIER ab123 null
+-// expect: IDENTIFIER abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_ null
+-// expect: EOF  null
++// expect:    1 19 'andy'
++// expect:    | 19 'formless'
++// expect:    | 19 'fo'
++// expect:    | 19 '_'
++// expect:    | 19 '_123'
++// expect:    | 19 '_abc'
++// expect:    | 19 'ab123'
++// expect:    2 19 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_'
++// expect:   13 39 ''

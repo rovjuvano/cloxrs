@@ -1,0 +1,12 @@
+space    tabs				newlines
+
+
+
+
+end
+
+// expect:    1 19 'space'
+// expect:    | 19 'tabs'
+// expect:    | 19 'newlines'
+// expect:    6 19 'end'
+// expect:   13 39 ''

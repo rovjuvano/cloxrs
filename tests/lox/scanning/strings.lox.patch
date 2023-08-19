@@ -1,0 +1,13 @@
+--- a/scanning/strings.lox	1970-01-01 00:00:00.000000000 +0000
++++ b/scanning/strings.lox	1970-01-01 00:00:00.000000000 +0000
+@@ -1,6 +1,6 @@
+ ""
+ "string"
+ 
+-// expect: STRING "" 
+-// expect: STRING "string" string
+-// expect: EOF  null
+\ No newline at end of file
++// expect:    1 20 '""'
++// expect:    2 20 '"string"'
++// expect:    7 39 ''

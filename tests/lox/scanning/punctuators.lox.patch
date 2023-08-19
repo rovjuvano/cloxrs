@@ -1,0 +1,43 @@
+--- a/scanning/punctuators.lox	1970-01-01 00:00:00.000000000 +0000
++++ b/scanning/punctuators.lox	1970-01-01 00:00:00.000000000 +0000
+@@ -1,21 +1,21 @@
+ (){};,+-*!===<=>=!=<>/.
+ 
+-// expect: LEFT_PAREN ( null
+-// expect: RIGHT_PAREN ) null
+-// expect: LEFT_BRACE { null
+-// expect: RIGHT_BRACE } null
+-// expect: SEMICOLON ; null
+-// expect: COMMA , null
+-// expect: PLUS + null
+-// expect: MINUS - null
+-// expect: STAR * null
+-// expect: BANG_EQUAL != null
+-// expect: EQUAL_EQUAL == null
+-// expect: LESS_EQUAL <= null
+-// expect: GREATER_EQUAL >= null
+-// expect: BANG_EQUAL != null
+-// expect: LESS < null
+-// expect: GREATER > null
+-// expect: SLASH / null
+-// expect: DOT . null
+-// expect: EOF  null
++// expect:    1  0 '('
++// expect:    |  1 ')'
++// expect:    |  2 '{'
++// expect:    |  3 '}'
++// expect:    |  8 ';'
++// expect:    |  4 ','
++// expect:    |  7 '+'
++// expect:    |  6 '-'
++// expect:    | 10 '*'
++// expect:    | 12 '!='
++// expect:    | 14 '=='
++// expect:    | 18 '<='
++// expect:    | 16 '>='
++// expect:    | 12 '!='
++// expect:    | 17 '<'
++// expect:    | 15 '>'
++// expect:    |  9 '/'
++// expect:    |  5 '.'
++// expect:   22 39 ''

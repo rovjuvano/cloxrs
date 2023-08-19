@@ -1,0 +1,20 @@
+--- a/scanning/numbers.lox	1970-01-01 00:00:00.000000000 +0000
++++ b/scanning/numbers.lox	1970-01-01 00:00:00.000000000 +0000
+@@ -3,10 +3,10 @@
+ .456
+ 123.
+ 
+-// expect: NUMBER 123 123.0
+-// expect: NUMBER 123.456 123.456
+-// expect: DOT . null
+-// expect: NUMBER 456 456.0
+-// expect: NUMBER 123 123.0
+-// expect: DOT . null
+-// expect: EOF  null
++// expect:    1 21 '123'
++// expect:    2 21 '123.456'
++// expect:    3  5 '.'
++// expect:    | 21 '456'
++// expect:    4 21 '123'
++// expect:    |  5 '.'
++// expect:   13 39 ''
