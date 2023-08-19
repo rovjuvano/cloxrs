@@ -1,0 +1,10 @@
+class Foo {
+  method() {
+    print method; // expect runtime error: Undefined variable 'method'.
+  }
+}
+
+Foo().method();
+// stack trace
+// [line 3] in method()
+// [line 7] in script

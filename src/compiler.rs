@@ -143,6 +143,12 @@ struct Upvalue {
 #[repr(u8)]
 enum FunctionType {
     TYPE_FUNCTION,
+//> Methods and Initializers initializer-type-enum
+    TYPE_INITIALIZER,
+//< Methods and Initializers initializer-type-enum
+//> Methods and Initializers method-type-enum
+    TYPE_METHOD,
+//< Methods and Initializers method-type-enum
     TYPE_SCRIPT,
 }
 use FunctionType::*;
@@ -170,12 +176,22 @@ struct Compiler {
     pub scopeDepth: isize,
 }
 //< Local Variables compiler-struct
+//> Methods and Initializers class-compiler-struct
+
+#[derive(Clone)] // Copy too but made explicit
+struct ClassCompiler {
+    pub enclosing: *mut ClassCompiler,
+}
+//< Methods and Initializers class-compiler-struct
 
 static mut parser: Parser = unsafe { uninit_static!(Parser) };
 //< Compiling Expressions parser
 //> Local Variables current-compiler
 static mut current: *mut Compiler = null_mut();
 //< Local Variables current-compiler
+//> Methods and Initializers current-class
+static mut currentClass: *mut ClassCompiler = null_mut();
+//< Methods and Initializers current-class
 //> Compiling Expressions compiling-chunk
 /* Compiling Expressions compiling-chunk < Calls and Functions current-chunk
 static mut compilingChunk: *mut Chunk = null_mut();
@@ -291,9 +307,17 @@ unsafe fn emitJump(mut instruction: OpCode) -> isize {
 //< Jumping Back and Forth emit-jump
 //> Compiling Expressions emit-return
 unsafe fn emitReturn() {
-//> Calls and Functions return-nil
+/* Calls and Functions return-nil < Methods and Initializers return-this
     unsafe { emitByte(OP_NIL as u8) };
-//< Calls and Functions return-nil
+*/
+//> Methods and Initializers return-this
+    if unsafe { (*current).r#type.clone() } as u8 == TYPE_INITIALIZER as u8 {
+        unsafe { emitBytes(OP_GET_LOCAL as u8, 0) };
+    } else {
+        unsafe { emitByte(OP_NIL as u8) };
+    }
+
+//< Methods and Initializers return-this
     unsafe { emitByte(OP_RETURN as u8) };
 }
 //< Compiling Expressions emit-return
@@ -358,8 +382,19 @@ unsafe fn initCompiler(mut compiler: *mut Compiler, mut r#type: FunctionType) {
 //> Closures init-zero-local-is-captured
     unsafe { (*local).isCaptured = false };
 //< Closures init-zero-local-is-captured
+/* Calls and Functions init-function-slot < Methods and Initializers slot-zero
     unsafe { (*local).name.start = "".as_ptr() };
     unsafe { (*local).name.length = 0 };
+*/
+//> Methods and Initializers slot-zero
+    if r#type.clone() as u8 != TYPE_FUNCTION as u8 {
+        unsafe { (*local).name.start = "this".as_ptr() };
+        unsafe { (*local).name.length = 4 };
+    } else {
+        unsafe { (*local).name.start = "".as_ptr() };
+        unsafe { (*local).name.length = 0 };
+    }
+//< Methods and Initializers slot-zero
 //< Calls and Functions init-function-slot
 }
 //< Local Variables init-compiler
@@ -668,6 +703,12 @@ unsafe fn dot(mut canAssign: bool) {
     if canAssign && unsafe { r#match(TOKEN_EQUAL) } {
         unsafe { expression() };
         unsafe { emitBytes(OP_SET_PROPERTY as u8, name) };
+//> Methods and Initializers parse-call
+    } else if unsafe { r#match(TOKEN_LEFT_PAREN) } {
+        let mut argCount: u8 = unsafe { argumentList() };
+        unsafe { emitBytes(OP_INVOKE as u8, name) };
+        unsafe { emitByte(argCount) };
+//< Methods and Initializers parse-call
     } else {
         unsafe { emitBytes(OP_GET_PROPERTY as u8, name) };
     }
@@ -805,6 +846,18 @@ unsafe fn variable(mut canAssign: bool) {
     unsafe { namedVariable(unsafe { parser.previous.clone() }, canAssign) };
 }
 //< Global Variables variable
+//> Methods and Initializers this
+unsafe fn this(mut _canAssign: bool) {
+//> this-outside-class
+    if unsafe { currentClass }.is_null() {
+        unsafe { error("Can't use 'this' outside of a class.") };
+        return;
+    }
+
+//< this-outside-class
+    unsafe { variable(false) };
+} // [this]
+//< Methods and Initializers this
 //> Compiling Expressions unary
 /* Compiling Expressions unary < Global Variables unary
 unsafe fn unary() {
@@ -950,7 +1003,12 @@ static mut rules: ParseRules = parse_rules!{
     [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
     [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
     [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
+/* Compiling Expressions rules < Methods and Initializers table-this
     [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
+*/
+//> Methods and Initializers table-this
+    [TOKEN_THIS]          = {this,     NULL,   PREC_NONE},
+//< Methods and Initializers table-this
 /* Compiling Expressions rules < Types of Values table-true
     [TOKEN_TRUE]          = {NULL,     NULL,   PREC_NONE},
 */
@@ -1069,17 +1127,67 @@ unsafe fn function(mut r#type: FunctionType) {
 //< Closures capture-upvalues
 }
 //< Calls and Functions compile-function
+//> Methods and Initializers method
+unsafe fn method() {
+    unsafe { consume(TOKEN_IDENTIFIER, "Expect method name.") };
+    let mut constant: u8 = unsafe { identifierConstant(unsafe { &mut parser.previous } as *mut Token) };
+//> method-body
+
+//< method-body
+/* Methods and Initializers method-body < Methods and Initializers method-type
+    let mut r#type: FunctionType = TYPE_FUNCTION;
+*/
+//> method-type
+    let mut r#type: FunctionType = TYPE_METHOD;
+//< method-type
+//> initializer-name
+    if unsafe { parser.previous.length } == 4 &&
+            unsafe { memcmp(unsafe { parser.previous.start }, "init".as_ptr(), 4) } == 0 {
+        r#type = TYPE_INITIALIZER;
+    }
+
+//< initializer-name
+//> method-body
+    unsafe { function(r#type) };
+//< method-body
+    unsafe { emitBytes(OP_METHOD as u8, constant) };
+}
+//< Methods and Initializers method
 //> Classes and Instances class-declaration
 unsafe fn classDeclaration() {
     unsafe { consume(TOKEN_IDENTIFIER, "Expect class name.") };
+//> Methods and Initializers class-name
+    let mut className: Token = unsafe { parser.previous.clone() };
+//< Methods and Initializers class-name
     let mut nameConstant: u8 = unsafe { identifierConstant(unsafe { &mut parser.previous } as *mut Token) };
     unsafe { declareVariable() };
 
     unsafe { emitBytes(OP_CLASS as u8, nameConstant) };
     unsafe { defineVariable(nameConstant) };
 
+//> Methods and Initializers create-class-compiler
+    let mut classCompiler: ClassCompiler = unsafe { uninit::<ClassCompiler>() };
+    classCompiler.enclosing = unsafe { currentClass };
+    unsafe { currentClass = &mut classCompiler as *mut ClassCompiler };
+
+//< Methods and Initializers create-class-compiler
+//> Methods and Initializers load-class
+    unsafe { namedVariable(className, false) };
+//< Methods and Initializers load-class
     unsafe { consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.") };
+//> Methods and Initializers class-body
+    while !unsafe { check(TOKEN_RIGHT_BRACE) } && !unsafe { check(TOKEN_EOF) } {
+        unsafe { method() };
+    }
+//< Methods and Initializers class-body
     unsafe { consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.") };
+//> Methods and Initializers pop-class
+    unsafe { emitByte(OP_POP as u8) };
+//< Methods and Initializers pop-class
+//> Methods and Initializers pop-enclosing
+
+    unsafe { currentClass = unsafe { (*currentClass).enclosing } };
+//< Methods and Initializers pop-enclosing
 }
 //< Classes and Instances class-declaration
 //> Calls and Functions fun-declaration
@@ -1226,6 +1334,12 @@ unsafe fn returnStatement() {
     if unsafe { r#match(TOKEN_SEMICOLON) } {
         unsafe { emitReturn() };
     } else {
+//> Methods and Initializers return-from-init
+        if unsafe { (*current).r#type.clone() } as u8 == TYPE_INITIALIZER as u8 {
+            unsafe { error("Can't return a value from an initializer.") };
+        }
+
+//< Methods and Initializers return-from-init
         unsafe { expression() };
         unsafe { consume(TOKEN_SEMICOLON, "Expect ';' after return value.") };
         unsafe { emitByte(OP_RETURN as u8) };

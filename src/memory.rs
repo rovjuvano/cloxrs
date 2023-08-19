@@ -189,10 +189,20 @@ unsafe fn blackenObject(mut object: *mut Obj) {
 
 //< log-blacken-object
     match unsafe { (*object).r#type.clone() } {
+//> Methods and Initializers blacken-bound-method
+        OBJ_BOUND_METHOD => {
+            let mut bound: *mut ObjBoundMethod = object as *mut ObjBoundMethod;
+            unsafe { markValue(unsafe { (*bound).receiver.clone() }) };
+            unsafe { markObject(unsafe { (*bound).method } as *mut Obj) };
+        }
+//< Methods and Initializers blacken-bound-method
 //> Classes and Instances blacken-class
         OBJ_CLASS => {
             let mut class: *mut ObjClass = object as *mut ObjClass;
             unsafe { markObject(unsafe { (*class).name } as *mut Obj) };
+//> Methods and Initializers mark-methods
+            unsafe { markTable(unsafe { &mut (*class).methods } as *mut Table) };
+//< Methods and Initializers mark-methods
         }
 //< Classes and Instances blacken-class
 //> blacken-closure
@@ -236,8 +246,17 @@ unsafe fn freeObject(mut object: *mut Obj) {
 
 //< Garbage Collection log-free-object
     match unsafe { (*object).r#type.clone() } {
+//> Methods and Initializers free-bound-method
+        OBJ_BOUND_METHOD => {
+            let _ = unsafe { FREE!(ObjBoundMethod, object) };
+        }
+//< Methods and Initializers free-bound-method
 //> Classes and Instances free-class
         OBJ_CLASS => {
+//> Methods and Initializers free-methods
+            let mut class: *mut ObjClass = object as *mut ObjClass;
+            unsafe { freeTable(unsafe { &mut (*class).methods } as *mut Table) };
+//< Methods and Initializers free-methods
             let _ = unsafe { FREE!(ObjClass, object) };
         } // [braces]
 //< Classes and Instances free-class
@@ -311,6 +330,9 @@ unsafe fn markRoots() {
 //> call-mark-compiler-roots
     unsafe { markCompilerRoots() };
 //< call-mark-compiler-roots
+//> Methods and Initializers mark-init-string
+    unsafe { markObject(unsafe { vm.initString } as *mut Obj) };
+//< Methods and Initializers mark-init-string
 }
 //< Garbage Collection mark-roots
 //> Garbage Collection trace-references

@@ -94,6 +94,9 @@ pub struct VM {
 //> Hash Tables vm-strings
     pub strings: Table,
 //< Hash Tables vm-strings
+//> Methods and Initializers vm-init-string
+    pub initString: *mut ObjString,
+//< Methods and Initializers vm-init-string
 //> Closures open-upvalues-field
     pub openUpvalues: *mut ObjUpvalue,
 //< Closures open-upvalues-field
@@ -239,6 +242,13 @@ pub unsafe fn initVM() {
 //> Hash Tables init-strings
     unsafe { initTable(unsafe { &mut vm.strings } as *mut Table) };
 //< Hash Tables init-strings
+//> Methods and Initializers init-init-string
+
+//> null-init-string
+    unsafe { vm.initString = null_mut() };
+//< null-init-string
+    unsafe { vm.initString = unsafe { copyString("init".as_ptr(), 4) } };
+//< Methods and Initializers init-init-string
 //> Calls and Functions define-native-clock
 
     unsafe { startTime = Instant::now() };
@@ -253,6 +263,9 @@ pub unsafe fn freeVM() {
 //> Hash Tables free-strings
     unsafe { freeTable(unsafe { &mut vm.strings } as *mut Table) };
 //< Hash Tables free-strings
+//> Methods and Initializers clear-init-string
+    unsafe { vm.initString = null_mut() };
+//< Methods and Initializers clear-init-string
 //> Strings call-free-objects
     unsafe { freeObjects() };
 //< Strings call-free-objects
@@ -326,10 +339,32 @@ unsafe fn call(mut closure: *mut ObjClosure, mut argCount: isize) -> bool {
 unsafe fn callValue(mut callee: Value, mut argCount: isize) -> bool {
     if IS_OBJ!(callee) {
         match unsafe { OBJ_TYPE!(callee.clone()) } {
+//> Methods and Initializers call-bound-method
+            OBJ_BOUND_METHOD => {
+                let mut bound: *mut ObjBoundMethod = unsafe { AS_BOUND_METHOD!(callee) };
+// //> store-receiver
+                unsafe { *vm.stackTop.offset(-argCount - 1) = unsafe { (*bound).receiver.clone() } };
+// //< store-receiver
+                return unsafe { call(unsafe { (*bound).method }, argCount) };
+            }
+//< Methods and Initializers call-bound-method
 //> Classes and Instances call-class
             OBJ_CLASS => {
                 let mut class: *mut ObjClass = unsafe { AS_CLASS!(callee) };
                 unsafe { *vm.stackTop.offset(-argCount - 1) = OBJ_VAL!(unsafe { newInstance(class) }) };
+//> Methods and Initializers call-init
+                let mut initializer: Value = unsafe { uninit::<Value>() };
+                if unsafe { tableGet(unsafe { &mut (*class).methods } as *mut Table,
+                        unsafe { vm.initString }, &mut initializer as *mut Value) } {
+                    return unsafe { call(unsafe { AS_CLOSURE!(initializer) }, argCount) };
+//> no-init-arity-error
+                } else if argCount != 0 {
+                    unsafe { runtimeError(format_args!("Expected 0 arguments but got {}.",
+                        argCount)) };
+                    return false;
+//< no-init-arity-error
+                }
+//< Methods and Initializers call-init
                 return true;
             }
 //< Classes and Instances call-class
@@ -357,6 +392,58 @@ unsafe fn callValue(mut callee: Value, mut argCount: isize) -> bool {
     return false;
 }
 //< Calls and Functions call-value
+//> Methods and Initializers invoke-from-class
+unsafe fn invokeFromClass(mut class: *mut ObjClass, mut name: *mut ObjString,
+        mut argCount: isize) -> bool {
+    let mut method: Value = unsafe { uninit::<Value>() };
+    if !unsafe { tableGet(unsafe { &mut (*class).methods } as *mut Table, name, &mut method as *mut Value) } {
+        unsafe { runtimeError(format_args!("Undefined property '{}'.", unsafe {
+            str_from_raw_parts!(unsafe { (*name).chars }, unsafe { (*name).length }) })) };
+        return false;
+    }
+    return unsafe { call(unsafe { AS_CLOSURE!(method) }, argCount) };
+}
+//< Methods and Initializers invoke-from-class
+//> Methods and Initializers invoke
+unsafe fn invoke(mut name: *mut ObjString, mut argCount: isize) -> bool {
+    let mut receiver: Value = unsafe { peek(argCount) };
+//> invoke-check-type
+
+    if !IS_INSTANCE!(receiver) {
+        unsafe { runtimeError(format_args!("Only instances have methods.")) };
+        return false;
+    }
+
+//< invoke-check-type
+    let mut instance: *mut ObjInstance = unsafe { AS_INSTANCE!(receiver) };
+//> invoke-field
+
+    let mut value: Value = unsafe { uninit::<Value>() };
+    if unsafe { tableGet(unsafe { &mut (*instance).fields } as *mut Table, name, &mut value as *mut Value) } {
+        unsafe { *(vm.stackTop.offset(-argCount - 1)) = value.clone() };
+        return unsafe { callValue(value, argCount) };
+    }
+
+//< invoke-field
+    return unsafe { invokeFromClass(unsafe { (*instance).class }, name, argCount) };
+}
+//< Methods and Initializers invoke
+//> Methods and Initializers bind-method
+unsafe fn bindMethod(mut class: *mut ObjClass, mut name: *mut ObjString) -> bool {
+    let mut method: Value = unsafe { uninit::<Value>() };
+    if !unsafe { tableGet(unsafe { &mut (*class).methods } as *mut Table, name, &mut method as *mut Value) } {
+        unsafe { runtimeError(format_args!("Undefined property '{}'.", unsafe {
+            str_from_raw_parts!(unsafe { (*name).chars }, unsafe { (*name).length }) })) };
+            return false;
+    }
+
+    let mut bound: *mut ObjBoundMethod = unsafe {
+        newBoundMethod(unsafe { peek(0) }, unsafe { AS_CLOSURE!(method) }) };
+    let _ = unsafe { pop() };
+    unsafe { push(OBJ_VAL!(bound)) };
+    return true;
+}
+//< Methods and Initializers bind-method
 //> Closures capture-upvalue
 unsafe fn captureUpvalue(mut local: *mut Value) -> *mut ObjUpvalue {
 //> look-for-existing-upvalue
@@ -397,6 +484,14 @@ unsafe fn closeUpvalues(mut last: *mut Value) {
     }
 }
 //< Closures close-upvalues
+//> Methods and Initializers define-method
+unsafe fn defineMethod(mut name: *mut ObjString) {
+    let mut method: Value = unsafe { peek(0) };
+    let mut class: *mut ObjClass = unsafe { AS_CLASS!(unsafe { peek(1) }) };
+    let _ = unsafe { tableSet(unsafe { &mut (*class).methods } as *mut Table, name, method) };
+    let _ = unsafe { pop() };
+}
+//< Methods and Initializers define-method
 //> Types of Values is-falsey
 fn isFalsey(mut value: Value) -> bool {
     return IS_NIL!(value) || (IS_BOOL!(value) && !unsafe { AS_BOOL!(value) });
@@ -672,10 +767,17 @@ unsafe fn run() -> InterpretResult {
                 }
 //> get-undefined
 
+//< get-undefined
+/* Classes and Instances get-undefined < Methods and Initializers get-method
                 unsafe { runtimeError(format_args!("Undefined property '{}'.", unsafe {
                     str_from_raw_parts!(unsafe { (*name).chars }, unsafe { (*name).length }) })) };
                 return INTERPRET_RUNTIME_ERROR;
-//< get-undefined
+*/
+//> Methods and Initializers get-method
+                if !unsafe { bindMethod(unsafe { (*instance).class }, name) } {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+//< Methods and Initializers get-method
             }
 //< Classes and Instances interpret-get-property
 //> Classes and Instances interpret-set-property
@@ -801,6 +903,16 @@ unsafe fn run() -> InterpretResult {
 //< update-frame-after-call
             }
 //< Calls and Functions interpret-call
+//> Methods and Initializers interpret-invoke
+            OP_INVOKE => {
+                let mut method: *mut ObjString = unsafe { READ_STRING!() };
+                let mut argCount: isize = unsafe { READ_BYTE!() } as isize;
+                if !unsafe { invoke(method, argCount) } {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                unsafe { frame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize - 1] } as *mut CallFrame };
+            }
+//< Methods and Initializers interpret-invoke
 //> Closures interpret-closure
             OP_CLOSURE => {
                 let mut function: *mut ObjFunction = unsafe { AS_FUNCTION!(unsafe { READ_CONSTANT!() }) };
@@ -859,6 +971,11 @@ unsafe fn run() -> InterpretResult {
                 unsafe { push(OBJ_VAL!(unsafe { newClass(unsafe { READ_STRING!() }) })) };
             }
 //< Classes and Instances interpret-class
+//> Methods and Initializers interpret-method
+            OP_METHOD => {
+                unsafe { defineMethod(unsafe { READ_STRING!() }) };
+            }
+//< Methods and Initializers interpret-method
         };
     }
 

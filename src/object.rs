@@ -24,6 +24,14 @@ pub(crate) use OBJ_TYPE;
 //< obj-type-macro
 //> is-string
 
+//> Methods and Initializers is-bound-method
+#[allow(unused_macros)]
+macro_rules! IS_BOUND_METHOD {
+    ($value:expr) => { isObjType($value.clone(), OBJ_BOUND_METHOD) };
+}
+#[allow(unused_imports)]
+pub(crate) use IS_BOUND_METHOD;
+//< Methods and Initializers is-bound-method
 //> Classes and Instances is-class
 #[allow(unused_macros)]
 macro_rules! IS_CLASS {
@@ -75,6 +83,15 @@ pub(crate) use IS_STRING;
 //< is-string
 //> as-string
 
+//> Methods and Initializers as-bound-method
+macro_rules! AS_BOUND_METHOD {
+    ($value:expr) => {{
+        let value = $value;
+        unsafe { AS_OBJ!(value) as *mut ObjBoundMethod }
+    }};
+}
+pub(crate) use AS_BOUND_METHOD;
+//< Methods and Initializers as-bound-method
 //> Classes and Instances as-class
 macro_rules! AS_CLASS {
     ($value:expr) => {{
@@ -141,6 +158,9 @@ pub(crate) use AS_STR;
 #[derive(Clone)] // Copy, Eq, Ord too but made explicit
 #[repr(u8)]
 pub enum ObjType {
+//> Methods and Initializers obj-type-bound-method
+    OBJ_BOUND_METHOD,
+//< Methods and Initializers obj-type-bound-method
 //> Classes and Instances obj-type-class
     OBJ_CLASS,
 //< Classes and Instances obj-type-class
@@ -246,6 +266,9 @@ pub struct ObjClosure {
 pub struct ObjClass {
     pub obj: Obj,
     pub name: *mut ObjString,
+//> Methods and Initializers class-methods
+    pub methods: Table,
+//< Methods and Initializers class-methods
 }
 //< Classes and Instances obj-class
 //> Classes and Instances obj-instance
@@ -259,6 +282,19 @@ pub struct ObjInstance {
 }
 //< Classes and Instances obj-instance
 
+//> Methods and Initializers obj-bound-method
+#[derive(Clone)] // Copy too but made explicit
+#[repr(C)]
+pub struct ObjBoundMethod {
+    pub obj: Obj,
+    pub receiver: Value,
+    pub method: *mut ObjClosure,
+}
+
+//< Methods and Initializers obj-bound-method
+//> Methods and Initializers new-bound-method-h
+// no need to forward declare newBoundMethod
+//< Methods and Initializers new-bound-method-h
 //> Classes and Instances new-class-h
 // no need to forward declare newClass
 //< Classes and Instances new-class-h
@@ -334,10 +370,23 @@ unsafe fn allocateObject(mut size: usize, mut r#type: ObjType) -> *mut Obj {
     return object;
 }
 //< allocate-object
+//> Methods and Initializers new-bound-method
+pub unsafe fn newBoundMethod(mut receiver: Value,
+        mut method: *mut ObjClosure) -> *mut ObjBoundMethod {
+    let mut bound: *mut ObjBoundMethod =
+        unsafe { ALLOCATE_OBJ!(ObjBoundMethod, OBJ_BOUND_METHOD) };
+    unsafe { (*bound).receiver = receiver };
+    unsafe { (*bound).method = method };
+    return bound;
+}
+//< Methods and Initializers new-bound-method
 //> Classes and Instances new-class
 pub unsafe fn newClass(mut name: *mut ObjString) -> *mut ObjClass {
     let mut class: *mut ObjClass = unsafe { ALLOCATE_OBJ!(ObjClass, OBJ_CLASS) };
     unsafe { (*class).name = name }; // [klass]
+//> Methods and Initializers init-methods
+    unsafe { initTable(unsafe { &mut (*class).methods } as *mut Table) };
+//< Methods and Initializers init-methods
     return class;
 }
 //< Classes and Instances new-class
@@ -493,6 +542,11 @@ unsafe fn printFunction(mut function: *mut ObjFunction) {
 //> print-object
 pub unsafe fn printObject(mut value: Value) {
     match unsafe { OBJ_TYPE!(value.clone()) } {
+//> Methods and Initializers print-bound-method
+        OBJ_BOUND_METHOD => {
+            unsafe { printFunction(unsafe { (*(*unsafe { AS_BOUND_METHOD!(value) }).method).function }) };
+        }
+//< Methods and Initializers print-bound-method
 //> Classes and Instances print-class
         OBJ_CLASS => {
             let mut name: *mut ObjString = unsafe { (*unsafe { AS_CLASS!(value) }).name };

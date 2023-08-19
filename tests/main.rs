@@ -335,3 +335,45 @@ mod classes_and_instances {
     case!(operator__not_class);
 }
 //< Classes and Instances tests
+//> Methods and Initializers tests
+mod methods_and_initializers {
+    use super::case;
+    case!(assignment__to_this);
+    case!(class__local_reference_self);
+    case!(class__reference_self);
+    case!(closure__close_over_method_parameter);
+    case!(constructor__arguments);
+    case!(constructor__call_init_early_return);
+    case!(constructor__call_init_explicitly);
+    case!(constructor__default);
+    case!(constructor__default_arguments);
+    case!(constructor__early_return);
+    case!(constructor__extra_arguments);
+    case!(constructor__init_not_method);
+    case!(constructor__missing_arguments);
+    case!(constructor__return_in_nested_function);
+    case!(constructor__return_value);
+    case!(field__get_and_set_method);
+    case!(field__method);
+    case!(field__method_binds_this);
+    case!(method__arity);
+    case!(method__empty_block);
+    case!(method__extra_arguments);
+    case!(method__missing_arguments);
+    case!(method__not_found);
+    case!(method__print_bound_method);
+    case!(method__refer_to_name);
+    case!(method__too_many_arguments);
+    case!(method__too_many_parameters);
+    case!(operator__equals_class);
+    case!(operator__equals_method);
+    case!(return__in_method);
+    case!(this__closure);
+    case!(this__nested_class);
+    case!(this__nested_closure);
+    case!(this__this_at_top_level);
+    case!(this__this_in_method);
+    case!(this__this_in_top_level_function);
+    case!(variable__local_from_method);
+}
+//< Methods and Initializers tests

@@ -47,6 +47,17 @@ unsafe fn constantInstruction(mut name: &str, mut chunk: *mut Chunk,
 //< return-after-operand
 }
 //< constant-instruction
+//> Methods and Initializers invoke-instruction
+unsafe fn invokeInstruction(mut name: &str, mut chunk: *mut Chunk,
+        mut offset: isize) -> isize {
+    let mut constant: u8 = unsafe { *(*chunk).code.offset(offset + 1) };
+    let mut argCount: u8 = unsafe { *(*chunk).code.offset(offset + 2) };
+    print!("{:<16} ({} args) {:4} ", name, argCount, constant);
+    unsafe { printValue(unsafe { (*(*chunk).constants.values.offset(constant as isize)).clone() }) };
+    print!("'\n");
+    return offset + 3;
+}
+//< Methods and Initializers invoke-instruction
 //> simple-instruction
 fn simpleInstruction(mut name: &str, mut offset: isize) -> isize {
     print!("{}\n", name);
@@ -175,6 +186,10 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_CALL =>
             unsafe { byteInstruction("OP_CALL", chunk, offset) },
 //< Calls and Functions disassemble-call
+//> Methods and Initializers disassemble-invoke
+        OP_INVOKE =>
+            unsafe { invokeInstruction("OP_INVOKE", chunk, offset) },
+//< Methods and Initializers disassemble-invoke
 //> Closures disassemble-closure
         OP_CLOSURE => {
             offset += 1;
@@ -210,6 +225,10 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_CLASS =>
             unsafe { constantInstruction("OP_CLASS", chunk, offset) },
 //< Classes and Instances disassemble-class
+//> Methods and Initializers disassemble-method
+        OP_METHOD =>
+            unsafe { constantInstruction("OP_METHOD", chunk, offset) },
+//< Methods and Initializers disassemble-method
         #[allow(unreachable_patterns)]
         _ => {
             print!("Unknown opcode {}\n", instruction as u8);

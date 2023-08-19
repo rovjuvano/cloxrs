@@ -86,6 +86,9 @@ pub enum OpCode {
 //> Calls and Functions op-call
     OP_CALL,
 //< Calls and Functions op-call
+//> Methods and Initializers invoke-op
+    OP_INVOKE,
+//< Methods and Initializers invoke-op
 //> Closures closure-op
     OP_CLOSURE,
 //< Closures closure-op
@@ -96,6 +99,9 @@ pub enum OpCode {
 //> Classes and Instances class-op
     OP_CLASS,
 //< Classes and Instances class-op
+//> Methods and Initializers method-op
+    OP_METHOD
+//< Methods and Initializers method-op
 }
 pub use OpCode::*;
 //< op-enum
