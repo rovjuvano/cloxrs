@@ -1,11 +1,24 @@
 //> Chunks of Bytecode value-c
 use ::core::ptr::*;
 use ::std::*;
+//> Strings value-include-string
+// no need for additional includes here
+//< Strings value-include-string
 
+//> Strings value-include-object
+use crate::object::*;
+//< Strings value-include-object
 use crate::memory::*;
 //> Chunks of Bytecode value-h
 pub use crate::common::*;
 
+//> Strings forward-declare-obj
+// no need to forward declare Obj
+//> forward-declare-obj-string
+// no need to forward declare ObjString
+//< forward-declare-obj-string
+
+//< Strings forward-declare-obj
 //> Types of Values value-type
 #[derive(Clone)] // Copy, Eq, Ord too but made explicit
 #[repr(u8)]
@@ -13,6 +26,9 @@ pub enum ValueType {
     VAL_BOOL,
     VAL_NIL, // [user-types]
     VAL_NUMBER,
+//> Strings val-obj
+    VAL_OBJ,
+//< Strings val-obj
 }
 pub use ValueType::*;
 
@@ -30,6 +46,9 @@ pub struct Value {
 pub union ValueUnion {
     pub boolean: bool,
     pub number: f64,
+//> Strings union-object
+    pub obj: *mut Obj,
+//< Strings union-object
 } // [as]
 //< Types of Values value
 //> Types of Values is-macros
@@ -46,9 +65,21 @@ macro_rules! IS_NUMBER {
     ($value:expr) => { $value.r#type.clone() as u8 == VAL_NUMBER as u8 };
 }
 pub(crate) use IS_NUMBER;
+//> Strings is-obj
+macro_rules! IS_OBJ {
+    ($value:expr) => { $value.r#type.clone() as u8 == VAL_OBJ as u8 };
+}
+pub(crate) use IS_OBJ;
+//< Strings is-obj
 //< Types of Values is-macros
 //> Types of Values as-macros
 
+//> Strings as-obj
+macro_rules! AS_OBJ {
+    ($value:expr) => { $value.r#as.obj };
+}
+pub(crate) use AS_OBJ;
+//< Strings as-obj
 macro_rules! AS_BOOL {
     ($value:expr) => { $value.r#as.boolean };
 }
@@ -72,6 +103,12 @@ macro_rules! NUMBER_VAL {
     ($value:expr) => { Value { r#type: VAL_NUMBER, r#as: ValueUnion { number: $value } } };
 }
 pub(crate) use NUMBER_VAL;
+//> Strings obj-val
+macro_rules! OBJ_VAL {
+    ($object:expr) => { Value { r#type: VAL_OBJ, r#as: ValueUnion { obj: $object as *mut Obj } } };
+}
+pub(crate) use OBJ_VAL;
+//< Strings obj-val
 //< Types of Values value-macros
 //> value-array
 
@@ -135,17 +172,29 @@ pub unsafe fn printValue(mut value: Value) {
         }
         VAL_NIL => print!("nil"),
         VAL_NUMBER => print!("{}", unsafe { AS_NUMBER!(value) }),
+//> Strings call-print-object
+        VAL_OBJ => unsafe { printObject(value) },
+//< Strings call-print-object
     }
 //< Types of Values print-value
 }
 //< print-value
 //> Types of Values values-equal
 pub unsafe fn valuesEqual(mut a: Value, mut b: Value) -> bool {
-    if a.r#type.clone() as u8 != b.r#type as u8 { return false; }
+    if a.r#type.clone() as u8 != b.r#type.clone() as u8 { return false; }
     return match a.r#type {
         VAL_BOOL   => (unsafe { AS_BOOL!(a) } == unsafe { AS_BOOL!(b) }),
         VAL_NIL    => true,
         VAL_NUMBER => (unsafe { AS_NUMBER!(a) } == unsafe { AS_NUMBER!(b) }),
+//> Strings strings-equal
+        VAL_OBJ => {
+            let mut aString: *mut ObjString = unsafe { AS_STRING!(a) };
+            let mut bString: *mut ObjString = unsafe { AS_STRING!(b) };
+            (unsafe { (*aString).length } == unsafe { (*bString).length }) &&
+                unsafe { memcmp(unsafe { (*aString).chars }, unsafe { (*bString).chars },
+                    unsafe { (*aString).length } as usize) } == 0
+        }
+//< Strings strings-equal
         #[allow(unreachable_patterns)]
         _ => false, // Unreachable.
     };

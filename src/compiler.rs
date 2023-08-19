@@ -12,6 +12,9 @@ use ::std::*;
 
 use crate::common::*;
 //> Scanning on Demand compiler-h
+//> Strings compiler-include-object
+pub use crate::object::*;
+//< Strings compiler-include-object
 //> Compiling Expressions compile-h
 pub use crate::vm::*;
 
@@ -257,6 +260,12 @@ unsafe fn number() {
 //< Types of Values const-number-val
 }
 //< Compiling Expressions number
+//> Strings parse-string
+unsafe fn string() {
+    unsafe { emitConstant(OBJ_VAL!(unsafe { copyString(unsafe { parser.previous.start.offset(1) },
+        unsafe { parser.previous.length - 2 }) })) };
+}
+//< Strings parse-string
 //> Compiling Expressions unary
 unsafe fn unary() {
     let mut operatorType: TokenType = unsafe { parser.previous.r#type.clone() };
@@ -338,7 +347,12 @@ static mut rules: ParseRules = parse_rules!{
     [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
 //< Types of Values table-comparisons
     [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
+/* Compiling Expressions rules < Strings table-string
     [TOKEN_STRING]        = {NULL,     NULL,   PREC_NONE},
+*/
+//> Strings table-string
+    [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
+//< Strings table-string
     [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
     [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
     [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},

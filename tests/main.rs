@@ -122,3 +122,5 @@ mod compiling_expressions {
 //< Compiling Expressions tests
 //> Types of Values tests
 //< Types of Values tests
+//> Strings tests
+//< Strings tests

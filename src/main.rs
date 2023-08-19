@@ -28,6 +28,9 @@ mod debug;
 //> memory-h
 mod memory;
 //< memory-h
+//> Strings object-h
+mod object;
+//< Strings object-h
 //> Scanning on Demand scanner-h
 mod scanner;
 //< Scanning on Demand scanner-h

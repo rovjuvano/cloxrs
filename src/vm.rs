@@ -1,10 +1,16 @@
 //> A Virtual Machine vm-c
 use ::core::mem::*;
+//> Strings concatenate
+use ::core::ptr::*;
+//< Strings concatenate
 //> Types of Values include-stdarg
 use ::std::io::*;
 //< Types of Values include-stdarg
 //> vm-include-stdio
 use ::std::*;
+//> Strings vm-include-string
+// no need for additional includes here
+//< Strings vm-include-string
 
 //< vm-include-stdio
 #[allow(unused_imports)]
@@ -16,6 +22,11 @@ use crate::compiler::*;
 #[cfg_attr(not(DEBUG_TRACE_EXECUTION), allow(unused_imports))]
 use crate::debug::*;
 //< vm-include-debug
+//> Strings vm-include-object-memory
+#[allow(unused_imports)]
+use crate::object::*;
+use crate::memory::*;
+//< Strings vm-include-object-memory
 //> A Virtual Machine vm-h
 pub use crate::chunk::*;
 //> vm-include-value
@@ -36,6 +47,9 @@ pub struct VM {
     pub stack: [Value; STACK_MAX as usize],
     pub stackTop: *mut Value,
 //< vm-stack
+//> Strings objects-root
+    pub objects: *mut Obj,
+//< Strings objects-root
 }
 
 //> interpret-result
@@ -55,6 +69,10 @@ pub enum InterpretResult {
 pub use InterpretResult::*;
 
 //< interpret-result
+//> Strings extern-vm
+// no need to extern vm
+
+//< Strings extern-vm
 // no need to forward declare initVM
 // no need to forward declare freeVM
 /* A Virtual Machine interpret-h < Scanning on Demand vm-interpret-h
@@ -90,9 +108,15 @@ pub unsafe fn initVM() {
 //> call-reset-stack
     unsafe { resetStack() };
 //< call-reset-stack
+//> Strings init-objects-root
+    unsafe { vm.objects = null_mut() };
+//< Strings init-objects-root
 }
 
 pub unsafe fn freeVM() {
+//> Strings call-free-objects
+    unsafe { freeObjects() };
+//< Strings call-free-objects
 }
 //> push
 pub unsafe fn push(mut value: Value) {
@@ -121,6 +145,21 @@ fn isFalsey(mut value: Value) -> bool {
     return IS_NIL!(value) || (IS_BOOL!(value) && !unsafe { AS_BOOL!(value) });
 }
 //< Types of Values is-falsey
+//> Strings concatenate
+unsafe fn concatenate() {
+    let mut b: *mut ObjString = unsafe { AS_STRING!(unsafe { pop() }) };
+    let mut a: *mut ObjString = unsafe { AS_STRING!(unsafe { pop() }) };
+
+    let mut length: isize = unsafe { (*a).length } + unsafe { (*b).length };
+    let mut chars: *mut u8 = unsafe { ALLOCATE!(u8, (length + 1) as usize) };
+    unsafe { copy_nonoverlapping(unsafe { (*a).chars }, chars, unsafe { (*a).length } as usize) };
+    unsafe { copy_nonoverlapping(unsafe { (*b).chars }, unsafe { chars.offset(unsafe { (*a).length }) }, unsafe { (*b).length } as usize) };
+    unsafe { *chars.offset(length) = b'\0' };
+
+    let mut result: *mut ObjString = unsafe { takeString(chars, length) };
+    unsafe { push(OBJ_VAL!(result)) };
+}
+//< Strings concatenate
 //> run
 /* Scanning on Demand vm-interpret-c < Compiling Expressions interpret-chunk
 #[allow(dead_code)]
@@ -236,8 +275,25 @@ unsafe fn run() -> InterpretResult {
 /* A Virtual Machine op-negate < Types of Values op-negate
             OP_NEGATE   => unsafe { push(-unsafe { pop() }) },
 */
-//> Types of Values op-arithmetic
+/* Types of Values op-arithmetic < Strings add-strings
             OP_ADD      => unsafe { BINARY_OP!(NUMBER_VAL, +) },
+*/
+//> Strings add-strings
+            OP_ADD => {
+                if IS_STRING!(unsafe { peek(0) }) && IS_STRING!(unsafe { peek(1) }) {
+                    unsafe { concatenate() };
+                } else if IS_NUMBER!(unsafe { peek(0) }) && IS_NUMBER!(unsafe { peek(1) }) {
+                    let mut b: f64 = unsafe { AS_NUMBER!(unsafe { pop() }) };
+                    let mut a: f64 = unsafe { AS_NUMBER!(unsafe { pop() }) };
+                    unsafe { push(NUMBER_VAL!(a + b)) };
+                } else {
+                    unsafe { runtimeError(format_args!(
+                        "Operands must be two numbers or two strings.")) };
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+            }
+//< Strings add-strings
+//> Types of Values op-arithmetic
             OP_SUBTRACT => unsafe { BINARY_OP!(NUMBER_VAL, -) },
             OP_MULTIPLY => unsafe { BINARY_OP!(NUMBER_VAL, *) },
             OP_DIVIDE   => unsafe { BINARY_OP!(NUMBER_VAL, /) },
