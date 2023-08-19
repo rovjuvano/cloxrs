@@ -306,3 +306,32 @@ mod closures {
 //< Closures tests
 //> Garbage Collection tests
 //< Garbage Collection tests
+//> Classes and Instances tests
+mod classes_and_instances {
+    use super::case;
+    case!(call__object);
+    case!(class__empty);
+    case!(field__call_function_field);
+    case!(field__call_nonfunction_field);
+    case!(field__get_on_bool);
+    case!(field__get_on_class);
+    case!(field__get_on_function);
+    case!(field__get_on_nil);
+    case!(field__get_on_num);
+    case!(field__get_on_string);
+    case!(field__many);
+    case!(field__on_instance);
+    case!(field__set_evaluation_order);
+    case!(field__set_on_bool);
+    case!(field__set_on_class);
+    case!(field__set_on_function);
+    case!(field__set_on_nil);
+    case!(field__set_on_num);
+    case!(field__set_on_string);
+    case!(field__undefined);
+    case!(number__decimal_point_at_eof);
+    case!(number__trailing_dot);
+    case!(operator__not);
+    case!(operator__not_class);
+}
+//< Classes and Instances tests

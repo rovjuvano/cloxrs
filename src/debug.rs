@@ -125,6 +125,12 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_SET_UPVALUE =>
             unsafe { byteInstruction("OP_SET_UPVALUE", chunk, offset) },
 //< Closures disassemble-upvalue-ops
+//> Classes and Instances disassemble-property-ops
+        OP_GET_PROPERTY =>
+            unsafe { constantInstruction("OP_GET_PROPERTY", chunk, offset) },
+        OP_SET_PROPERTY =>
+            unsafe { constantInstruction("OP_SET_PROPERTY", chunk, offset) },
+//< Classes and Instances disassemble-property-ops
 //> Types of Values disassemble-comparison
         OP_EQUAL =>
             simpleInstruction("OP_EQUAL", offset),
@@ -200,6 +206,10 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
 //< Closures disassemble-close-upvalue
         OP_RETURN =>
             simpleInstruction("OP_RETURN", offset),
+//> Classes and Instances disassemble-class
+        OP_CLASS =>
+            unsafe { constantInstruction("OP_CLASS", chunk, offset) },
+//< Classes and Instances disassemble-class
         #[allow(unreachable_patterns)]
         _ => {
             print!("Unknown opcode {}\n", instruction as u8);

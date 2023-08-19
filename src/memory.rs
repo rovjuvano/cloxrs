@@ -189,6 +189,12 @@ unsafe fn blackenObject(mut object: *mut Obj) {
 
 //< log-blacken-object
     match unsafe { (*object).r#type.clone() } {
+//> Classes and Instances blacken-class
+        OBJ_CLASS => {
+            let mut class: *mut ObjClass = object as *mut ObjClass;
+            unsafe { markObject(unsafe { (*class).name } as *mut Obj) };
+        }
+//< Classes and Instances blacken-class
 //> blacken-closure
         OBJ_CLOSURE => {
             let mut closure: *mut ObjClosure = object as *mut ObjClosure;
@@ -205,6 +211,13 @@ unsafe fn blackenObject(mut object: *mut Obj) {
             unsafe { markArray(unsafe { &mut (*function).chunk.constants } as *mut ValueArray) };
         }
 //< blacken-function
+//> Classes and Instances blacken-instance
+        OBJ_INSTANCE => {
+            let mut instance: *mut ObjInstance = object as *mut ObjInstance;
+            unsafe { markObject(unsafe { (*instance).class } as *mut Obj) };
+            unsafe { markTable(unsafe { &mut (*instance).fields } as *mut Table) };
+        }
+//< Classes and Instances blacken-instance
 //> blacken-upvalue
         OBJ_UPVALUE => {
             unsafe { markValue(unsafe { (*(object as *mut ObjUpvalue)).closed.clone() }) };
@@ -223,6 +236,11 @@ unsafe fn freeObject(mut object: *mut Obj) {
 
 //< Garbage Collection log-free-object
     match unsafe { (*object).r#type.clone() } {
+//> Classes and Instances free-class
+        OBJ_CLASS => {
+            let _ = unsafe { FREE!(ObjClass, object) };
+        } // [braces]
+//< Classes and Instances free-class
 //> Closures free-closure
         OBJ_CLOSURE => {
 //> free-upvalues
@@ -240,6 +258,13 @@ unsafe fn freeObject(mut object: *mut Obj) {
             let _ = unsafe { FREE!(ObjFunction, object) };
         }
 //< Calls and Functions free-function
+//> Classes and Instances free-instance
+        OBJ_INSTANCE => {
+            let mut instance: *mut ObjInstance = object as *mut ObjInstance;
+            unsafe { freeTable(unsafe { &mut (*instance).fields } as *mut Table) };
+            let _ = unsafe { FREE!(ObjInstance, object) };
+        }
+//< Classes and Instances free-instance
 //> Calls and Functions free-native
         OBJ_NATIVE => {
             let _ = unsafe { FREE!(ObjNative, object) };

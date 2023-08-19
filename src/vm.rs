@@ -326,6 +326,13 @@ unsafe fn call(mut closure: *mut ObjClosure, mut argCount: isize) -> bool {
 unsafe fn callValue(mut callee: Value, mut argCount: isize) -> bool {
     if IS_OBJ!(callee) {
         match unsafe { OBJ_TYPE!(callee.clone()) } {
+//> Classes and Instances call-class
+            OBJ_CLASS => {
+                let mut class: *mut ObjClass = unsafe { AS_CLASS!(callee) };
+                unsafe { *vm.stackTop.offset(-argCount - 1) = OBJ_VAL!(unsafe { newInstance(class) }) };
+                return true;
+            }
+//< Classes and Instances call-class
 //> Closures call-value-closure
             OBJ_CLOSURE =>
                 return unsafe { call(unsafe { AS_CLOSURE!(callee) }, argCount) },
@@ -645,6 +652,48 @@ unsafe fn run() -> InterpretResult {
                 unsafe { *(*(*(*(*frame).closure).upvalues.offset(slot as isize))).location = unsafe { peek(0) } };
             }
 //< Closures interpret-set-upvalue
+//> Classes and Instances interpret-get-property
+            OP_GET_PROPERTY => {
+//> get-not-instance
+                if !IS_INSTANCE!(unsafe { peek(0) }) {
+                    unsafe { runtimeError(format_args!("Only instances have properties.")) };
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+//< get-not-instance
+                let mut instance: *mut ObjInstance = unsafe { AS_INSTANCE!(unsafe { peek(0) }) };
+                let mut name: *mut ObjString = unsafe { READ_STRING!() };
+
+                let mut value: Value = unsafe { uninit::<Value>() };
+                if unsafe { tableGet(unsafe { &mut (*instance).fields } as *mut Table, name, &mut value as *mut Value) } {
+                    let _ = unsafe { pop() }; // Instance.
+                    unsafe { push(value) };
+                    continue;
+                }
+//> get-undefined
+
+                unsafe { runtimeError(format_args!("Undefined property '{}'.", unsafe {
+                    str_from_raw_parts!(unsafe { (*name).chars }, unsafe { (*name).length }) })) };
+                return INTERPRET_RUNTIME_ERROR;
+//< get-undefined
+            }
+//< Classes and Instances interpret-get-property
+//> Classes and Instances interpret-set-property
+            OP_SET_PROPERTY => {
+//> set-not-instance
+                if !IS_INSTANCE!(unsafe { peek(1) }) {
+                    unsafe { runtimeError(format_args!("Only instances have fields.")) };
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+//< set-not-instance
+                let mut instance: *mut ObjInstance = unsafe { AS_INSTANCE!(unsafe { peek(1) }) };
+                let _ = unsafe { tableSet(unsafe { &mut (*instance).fields } as *mut Table, unsafe { READ_STRING!() }, peek(0)) };
+                let mut value: Value = unsafe { pop() };
+                let _ = unsafe { pop() };
+                unsafe { push(value) };
+            }
+//< Classes and Instances interpret-set-property
 //> Types of Values interpret-equal
             OP_EQUAL => {
                 let mut b: Value = unsafe { pop() };
@@ -805,6 +854,11 @@ unsafe fn run() -> InterpretResult {
                 frame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize - 1] } as *mut CallFrame;
 //< Calls and Functions interpret-return
             }
+//> Classes and Instances interpret-class
+            OP_CLASS => {
+                unsafe { push(OBJ_VAL!(unsafe { newClass(unsafe { READ_STRING!() }) })) };
+            }
+//< Classes and Instances interpret-class
         };
     }
 

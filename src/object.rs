@@ -8,6 +8,9 @@ pub use crate::common::*;
 //> Calls and Functions object-include-chunk
 pub use crate::chunk::*;
 //< Calls and Functions object-include-chunk
+//> Classes and Instances object-include-table
+pub use crate::table::*;
+//< Classes and Instances object-include-table
 pub use crate::value::*;
 //> obj-type-macro
 
@@ -21,6 +24,14 @@ pub(crate) use OBJ_TYPE;
 //< obj-type-macro
 //> is-string
 
+//> Classes and Instances is-class
+#[allow(unused_macros)]
+macro_rules! IS_CLASS {
+    ($value:expr) => { isObjType($value.clone(), OBJ_CLASS) };
+}
+#[allow(unused_imports)]
+pub(crate) use IS_CLASS;
+//< Classes and Instances is-class
 //> Closures is-closure
 #[allow(unused_macros)]
 macro_rules! IS_CLOSURE {
@@ -41,6 +52,12 @@ macro_rules! IS_FUNCTION {
 //< Garbage Collection glob-imports-gone-wild
 pub(crate) use IS_FUNCTION;
 //< Calls and Functions is-function
+//> Classes and Instances is-instance
+macro_rules! IS_INSTANCE {
+    ($value:expr) => { isObjType($value.clone(), OBJ_INSTANCE) };
+}
+pub(crate) use IS_INSTANCE;
+//< Classes and Instances is-instance
 //> Calls and Functions is-native
 #[allow(unused_macros)]
 macro_rules! IS_NATIVE {
@@ -58,6 +75,15 @@ pub(crate) use IS_STRING;
 //< is-string
 //> as-string
 
+//> Classes and Instances as-class
+macro_rules! AS_CLASS {
+    ($value:expr) => {{
+        let value = $value;
+        unsafe { AS_OBJ!(value) as *mut ObjClass }
+     }};
+}
+pub(crate) use AS_CLASS;
+//< Classes and Instances as-class
 //> Closures as-closure
 macro_rules! AS_CLOSURE {
     ($value:expr) => {{
@@ -76,6 +102,15 @@ macro_rules! AS_FUNCTION {
 }
 pub(crate) use AS_FUNCTION;
 //< Calls and Functions as-function
+//> Classes and Instances as-instance
+macro_rules! AS_INSTANCE {
+    ($value:expr) => {{
+        let value = $value;
+        unsafe { AS_OBJ!(value) as *mut ObjInstance }
+    }};
+}
+pub(crate) use AS_INSTANCE;
+//< Classes and Instances as-instance
 //> Calls and Functions as-native
 macro_rules! AS_NATIVE {
     ($value:expr) => {{
@@ -106,12 +141,18 @@ pub(crate) use AS_STR;
 #[derive(Clone)] // Copy, Eq, Ord too but made explicit
 #[repr(u8)]
 pub enum ObjType {
+//> Classes and Instances obj-type-class
+    OBJ_CLASS,
+//< Classes and Instances obj-type-class
 //> Closures obj-type-closure
     OBJ_CLOSURE,
 //< Closures obj-type-closure
 //> Calls and Functions obj-type-function
     OBJ_FUNCTION,
 //< Calls and Functions obj-type-function
+//> Classes and Instances obj-type-instance
+    OBJ_INSTANCE,
+//< Classes and Instances obj-type-instance
 //> Calls and Functions obj-type-native
     OBJ_NATIVE,
 //< Calls and Functions obj-type-native
@@ -198,13 +239,38 @@ pub struct ObjClosure {
 //< upvalue-fields
 }
 //< Closures obj-closure
+//> Classes and Instances obj-class
 
+#[derive(Clone)] // Copy too but made explicit
+#[repr(C)]
+pub struct ObjClass {
+    pub obj: Obj,
+    pub name: *mut ObjString,
+}
+//< Classes and Instances obj-class
+//> Classes and Instances obj-instance
+
+#[derive(Clone)] // Copy too but made explicit
+#[repr(C)]
+pub struct ObjInstance {
+    pub obj: Obj,
+    pub class: *mut ObjClass,
+    pub fields: Table, // [fields]
+}
+//< Classes and Instances obj-instance
+
+//> Classes and Instances new-class-h
+// no need to forward declare newClass
+//< Classes and Instances new-class-h
 //> Closures new-closure-h
 // no need to forward declare newClosure
 //< Closures new-closure-h
 //> Calls and Functions new-function-h
 // no need to forward declare newFunction
 //< Calls and Functions new-function-h
+//> Classes and Instances new-instance-h
+// no need to forward declare newInstance
+//< Classes and Instances new-instance-h
 //> Calls and Functions new-native-h
 // no need to forward declare newNative
 //< Calls and Functions new-native-h
@@ -229,6 +295,9 @@ pub fn isObjType(mut value: Value, mut r#type: ObjType) -> bool {
 //< is-obj-type
 //< Strings object-h
 //> Hash Tables object-include-table
+//> Classes and Instances object-include-table
+#[allow(unused_imports)]
+//< Classes and Instances object-include-table
 use crate::table::*;
 //< Hash Tables object-include-table
 #[allow(unused_imports)]
@@ -265,6 +334,13 @@ unsafe fn allocateObject(mut size: usize, mut r#type: ObjType) -> *mut Obj {
     return object;
 }
 //< allocate-object
+//> Classes and Instances new-class
+pub unsafe fn newClass(mut name: *mut ObjString) -> *mut ObjClass {
+    let mut class: *mut ObjClass = unsafe { ALLOCATE_OBJ!(ObjClass, OBJ_CLASS) };
+    unsafe { (*class).name = name }; // [klass]
+    return class;
+}
+//< Classes and Instances new-class
 //> Closures new-closure
 pub unsafe fn newClosure(mut function: *mut ObjFunction) -> *mut ObjClosure {
 //> allocate-upvalue-array
@@ -296,6 +372,14 @@ pub unsafe fn newFunction() -> *mut ObjFunction {
     return function;
 }
 //< Calls and Functions new-function
+//> Classes and Instances new-instance
+pub unsafe fn newInstance(mut class: *mut ObjClass) -> *mut ObjInstance {
+    let mut instance: *mut ObjInstance = unsafe { ALLOCATE_OBJ!(ObjInstance, OBJ_INSTANCE) };
+    unsafe { (*instance).class = class };
+    unsafe { initTable(unsafe { &mut (*instance).fields } as *mut Table) };
+    return instance;
+}
+//< Classes and Instances new-instance
 //> Calls and Functions new-native
 pub fn newNative(mut function: NativeFn) -> *mut ObjNative {
     let mut native: *mut ObjNative = unsafe { ALLOCATE_OBJ!(ObjNative, OBJ_NATIVE) };
@@ -409,6 +493,12 @@ unsafe fn printFunction(mut function: *mut ObjFunction) {
 //> print-object
 pub unsafe fn printObject(mut value: Value) {
     match unsafe { OBJ_TYPE!(value.clone()) } {
+//> Classes and Instances print-class
+        OBJ_CLASS => {
+            let mut name: *mut ObjString = unsafe { (*unsafe { AS_CLASS!(value) }).name };
+            print!("{}", unsafe { str_from_raw_parts!(unsafe { (*name).chars }, unsafe { (*name).length }) });
+        }
+//< Classes and Instances print-class
 //> Closures print-closure
         OBJ_CLOSURE => {
             unsafe { printFunction(unsafe { (*unsafe { AS_CLOSURE!(value) }).function }) };
@@ -419,6 +509,12 @@ pub unsafe fn printObject(mut value: Value) {
             unsafe { printFunction(unsafe { AS_FUNCTION!(value) }) };
         }
 //< Calls and Functions print-function
+//> Classes and Instances print-instance
+        OBJ_INSTANCE => {
+            let mut name: *mut ObjString = unsafe { (*(*unsafe { AS_INSTANCE!(value) }).class).name };
+            print!("{} instance", unsafe { str_from_raw_parts!(unsafe { (*name).chars }, unsafe { (*name).length }) });
+        }
+//< Classes and Instances print-instance
 //> Calls and Functions print-native
         OBJ_NATIVE => {
             print!("<native fn>");

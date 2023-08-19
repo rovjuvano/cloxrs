@@ -44,6 +44,10 @@ pub enum OpCode {
     OP_GET_UPVALUE,
     OP_SET_UPVALUE,
 //< Closures upvalue-ops
+//> Classes and Instances property-ops
+    OP_GET_PROPERTY,
+    OP_SET_PROPERTY,
+//< Classes and Instances property-ops
 //> Types of Values comparison-ops
     OP_EQUAL,
     OP_GREATER,
@@ -89,6 +93,9 @@ pub enum OpCode {
     OP_CLOSE_UPVALUE,
 //< Closures close-upvalue-op
     OP_RETURN,
+//> Classes and Instances class-op
+    OP_CLASS,
+//< Classes and Instances class-op
 }
 pub use OpCode::*;
 //< op-enum

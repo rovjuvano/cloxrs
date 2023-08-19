@@ -93,7 +93,9 @@ enum Precedence {
     PREC_TERM,        // + -
     PREC_FACTOR,      // * /
     PREC_UNARY,       // ! -
+/* Compiling Expressions precedence < Classes and Instances table-dot
     #[allow(dead_code)]
+*/
     PREC_CALL,        // . ()
     #[allow(dead_code)]
     PREC_PRIMARY,
@@ -658,6 +660,19 @@ unsafe fn call(mut _canAssign: bool) {
     unsafe { emitBytes(OP_CALL as u8, argCount) };
 }
 //< Calls and Functions compile-call
+//> Classes and Instances compile-dot
+unsafe fn dot(mut canAssign: bool) {
+    unsafe { consume(TOKEN_IDENTIFIER, "Expect property name after '.'.") };
+    let mut name: u8 = unsafe { identifierConstant(unsafe { &mut parser.previous } as *mut Token) };
+
+    if canAssign && unsafe { r#match(TOKEN_EQUAL) } {
+        unsafe { expression() };
+        unsafe { emitBytes(OP_SET_PROPERTY as u8, name) };
+    } else {
+        unsafe { emitBytes(OP_GET_PROPERTY as u8, name) };
+    }
+}
+//< Classes and Instances compile-dot
 //> Types of Values parse-literal
 /* Types of Values parse-literal < Global Variables parse-literal
 unsafe fn literal() {
@@ -852,7 +867,12 @@ static mut rules: ParseRules = parse_rules!{
     [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, // [big]
     [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
     [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
+/* Compiling Expressions rules < Classes and Instances table-dot
     [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
+*/
+//> Classes and Instances table-dot
+    [TOKEN_DOT]           = {NULL,     dot,    PREC_CALL},
+//< Classes and Instances table-dot
     [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
     [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
     [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
@@ -1049,6 +1069,19 @@ unsafe fn function(mut r#type: FunctionType) {
 //< Closures capture-upvalues
 }
 //< Calls and Functions compile-function
+//> Classes and Instances class-declaration
+unsafe fn classDeclaration() {
+    unsafe { consume(TOKEN_IDENTIFIER, "Expect class name.") };
+    let mut nameConstant: u8 = unsafe { identifierConstant(unsafe { &mut parser.previous } as *mut Token) };
+    unsafe { declareVariable() };
+
+    unsafe { emitBytes(OP_CLASS as u8, nameConstant) };
+    unsafe { defineVariable(nameConstant) };
+
+    unsafe { consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.") };
+    unsafe { consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.") };
+}
+//< Classes and Instances class-declaration
 //> Calls and Functions fun-declaration
 unsafe fn funDeclaration() {
     let mut global: u8 = unsafe { parseVariable("Expect function name.") };
@@ -1245,8 +1278,15 @@ unsafe fn synchronize() {
 //< Global Variables synchronize
 //> Global Variables declaration
 unsafe fn declaration() {
-//> Calls and Functions match-fun
+//> Classes and Instances match-class
+    if unsafe { r#match(TOKEN_CLASS) } {
+        unsafe { classDeclaration() };
+/* Calls and Functions match-fun < Classes and Instances match-class
     if unsafe { r#match(TOKEN_FUN) } {
+*/
+    } else if unsafe { r#match(TOKEN_FUN) } {
+//< Classes and Instances match-class
+//> Calls and Functions match-fun
         unsafe { funDeclaration() };
 /* Global Variables match-var < Calls and Functions match-fun
     if unsafe { r#match(TOKEN_VAR) } {
