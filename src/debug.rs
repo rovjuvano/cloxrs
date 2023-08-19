@@ -57,6 +57,20 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_CONSTANT =>
             unsafe { constantInstruction("OP_CONSTANT", chunk, offset) },
 //< disassemble-constant
+//> A Virtual Machine disassemble-binary
+        OP_ADD =>
+            simpleInstruction("OP_ADD", offset),
+        OP_SUBTRACT =>
+            simpleInstruction("OP_SUBTRACT", offset),
+        OP_MULTIPLY =>
+            simpleInstruction("OP_MULTIPLY", offset),
+        OP_DIVIDE =>
+            simpleInstruction("OP_DIVIDE", offset),
+//< A Virtual Machine disassemble-binary
+//> A Virtual Machine disassemble-negate
+        OP_NEGATE =>
+            simpleInstruction("OP_NEGATE", offset),
+//< A Virtual Machine disassemble-negate
         OP_RETURN =>
             simpleInstruction("OP_RETURN", offset),
         #[allow(unreachable_patterns)]

@@ -13,6 +13,7 @@ pub fn run(stdout: &str) {
     let actual = (cmd.status.code(), stdout, stderr);
     assert_eq!(actual, expected);
 }
+/* Chunks of Bytecode tests < A Virtual Machine tests
 #[test]
 fn chunks_of_bytecode() {
     run("\
@@ -21,3 +22,20 @@ fn chunks_of_bytecode() {
         0002    | OP_RETURN\n\
     ");
 }
+*/
+//> A Virtual Machine tests
+#[test]
+fn a_virtual_machine() {
+    run("\
+        == test chunk ==\n\
+        0000  123 OP_CONSTANT         0 '1.2'\n\
+        0002    | OP_CONSTANT         1 '3.4'\n\
+        0004    | OP_ADD\n\
+        0005    | OP_CONSTANT         2 '5.6'\n\
+        0007    | OP_DIVIDE\n\
+        0008    | OP_NEGATE\n\
+        0009    | OP_RETURN\n\
+        -0.8214285714285714\n\
+    ");
+}
+//< A Virtual Machine tests

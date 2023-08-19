@@ -14,6 +14,17 @@ pub enum OpCode {
 //> op-constant
     OP_CONSTANT,
 //< op-constant
+//> A Virtual Machine binary-ops
+    OP_ADD,
+    #[allow(dead_code)]
+    OP_SUBTRACT,
+    #[allow(dead_code)]
+    OP_MULTIPLY,
+    OP_DIVIDE,
+//< A Virtual Machine binary-ops
+//> A Virtual Machine negate-op
+    OP_NEGATE,
+//< A Virtual Machine negate-op
     OP_RETURN,
 }
 pub use OpCode::*;

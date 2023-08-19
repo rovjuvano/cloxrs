@@ -28,6 +28,9 @@ mod memory;
 //> value-h
 mod value;
 //< value-h
+//> A Virtual Machine vm-h
+mod vm;
+//< A Virtual Machine vm-h
 
 use crate::common::*;
 //> main-include-chunk
@@ -36,8 +39,15 @@ use crate::chunk::*;
 //> main-include-debug
 use crate::debug::*;
 //< main-include-debug
+//> A Virtual Machine main-include-vm
+use crate::vm::*;
+//< A Virtual Machine main-include-vm
 
 fn main() {
+//> A Virtual Machine main-init-vm
+    unsafe { initVM() };
+
+//< A Virtual Machine main-init-vm
 //> main-chunk
     let mut chunk: Chunk = unsafe { uninit::<Chunk>() };
     unsafe { initChunk(&mut chunk as *mut Chunk) };
@@ -55,6 +65,23 @@ fn main() {
     unsafe { writeChunk(&mut chunk as *mut Chunk, OP_CONSTANT as u8, 123) };
     unsafe { writeChunk(&mut chunk as *mut Chunk, constant as u8, 123) };
 //< main-chunk-line
+//> A Virtual Machine main-chunk
+
+    constant = unsafe { addConstant(&mut chunk as *mut Chunk, 3.4) };
+    unsafe { writeChunk(&mut chunk as *mut Chunk, OP_CONSTANT as u8, 123) };
+    unsafe { writeChunk(&mut chunk as *mut Chunk, constant as u8, 123) };
+
+    unsafe { writeChunk(&mut chunk as *mut Chunk, OP_ADD as u8, 123) };
+
+    constant = unsafe { addConstant(&mut chunk as *mut Chunk, 5.6) };
+    unsafe { writeChunk(&mut chunk as *mut Chunk, OP_CONSTANT as u8, 123) };
+    unsafe { writeChunk(&mut chunk as *mut Chunk, constant as u8, 123) };
+
+    unsafe { writeChunk(&mut chunk as *mut Chunk, OP_DIVIDE as u8, 123) };
+//< A Virtual Machine main-chunk
+//> A Virtual Machine main-negate
+    unsafe { writeChunk(&mut chunk as *mut Chunk, OP_NEGATE as u8, 123) };
+//< A Virtual Machine main-negate
 /* Chunks of Bytecode main-chunk < Chunks of Bytecode main-chunk-line
     unsafe { writeChunk(&mut chunk as *mut Chunk, OP_RETURN as u8) };
 */
@@ -66,6 +93,12 @@ fn main() {
 
     unsafe { disassembleChunk(&mut chunk as *mut Chunk, "test chunk") };
 //< main-disassemble-chunk
+//> A Virtual Machine main-interpret
+    let _ = unsafe { interpret(&mut chunk as *mut Chunk) };
+//< A Virtual Machine main-interpret
+//> A Virtual Machine main-free-vm
+    unsafe { freeVM() };
+//< A Virtual Machine main-free-vm
 //> main-chunk
     unsafe { freeChunk(&mut chunk as *mut Chunk as *mut Chunk) };
 //< main-chunk
