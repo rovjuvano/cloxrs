@@ -1,0 +1,11 @@
+[package]
+name = "cloxrs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Robert Juliano <cargo@rovjuvano.com>"]
+description = "line-by-line port of clox to Rust"
+license = "MIT"
+publish = false
+repository = "https://github.com/rovjuvano/cloxrs"
+
+[dependencies]
