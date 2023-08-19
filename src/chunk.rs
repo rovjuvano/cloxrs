@@ -22,6 +22,18 @@ pub enum OpCode {
     OP_TRUE,
     OP_FALSE,
 //< Types of Values literal-ops
+//> Global Variables pop-op
+    OP_POP,
+//< Global Variables pop-op
+//> Global Variables get-global-op
+    OP_GET_GLOBAL,
+//< Global Variables get-global-op
+//> Global Variables define-global-op
+    OP_DEFINE_GLOBAL,
+//< Global Variables define-global-op
+//> Global Variables set-global-op
+    OP_SET_GLOBAL,
+//< Global Variables set-global-op
 //> Types of Values comparison-ops
     OP_EQUAL,
     OP_GREATER,
@@ -45,6 +57,9 @@ pub enum OpCode {
 //> A Virtual Machine negate-op
     OP_NEGATE,
 //< A Virtual Machine negate-op
+//> Global Variables op-print
+    OP_PRINT,
+//< Global Variables op-print
     OP_RETURN,
 }
 pub use OpCode::*;

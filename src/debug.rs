@@ -76,6 +76,22 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_FALSE =>
             simpleInstruction("OP_FALSE", offset),
 //< Types of Values disassemble-literals
+//> Global Variables disassemble-pop
+        OP_POP =>
+            simpleInstruction("OP_POP", offset),
+//< Global Variables disassemble-pop
+//> Global Variables disassemble-get-global
+        OP_GET_GLOBAL =>
+            unsafe { constantInstruction("OP_GET_GLOBAL", chunk, offset) },
+//< Global Variables disassemble-get-global
+//> Global Variables disassemble-define-global
+        OP_DEFINE_GLOBAL =>
+            unsafe { constantInstruction("OP_DEFINE_GLOBAL", chunk, offset) },
+//< Global Variables disassemble-define-global
+//> Global Variables disassemble-set-global
+        OP_SET_GLOBAL =>
+            unsafe { constantInstruction("OP_SET_GLOBAL", chunk, offset) },
+//< Global Variables disassemble-set-global
 //> Types of Values disassemble-comparison
         OP_EQUAL =>
             simpleInstruction("OP_EQUAL", offset),
@@ -102,6 +118,10 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_NEGATE =>
             simpleInstruction("OP_NEGATE", offset),
 //< A Virtual Machine disassemble-negate
+//> Global Variables disassemble-print
+        OP_PRINT =>
+            simpleInstruction("OP_PRINT", offset),
+//< Global Variables disassemble-print
         OP_RETURN =>
             simpleInstruction("OP_RETURN", offset),
         #[allow(unreachable_patterns)]

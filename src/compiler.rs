@@ -83,8 +83,13 @@ use Precedence::*;
 //< precedence
 //> parse-fn-type
 
-type ParseFn = unsafe fn() -> ();
 //< parse-fn-type
+/* Compiling Expressions parse-fn-type < Global Variables parse-fn-type
+type ParseFn = unsafe fn() -> ();
+*/
+//> Global Variables parse-fn-type
+type ParseFn = unsafe fn(canAssign: bool) -> ();
+//< Global Variables parse-fn-type
 //> parse-rule
 
 #[derive(Clone)] // Copy too but made explicit
@@ -160,6 +165,18 @@ unsafe fn consume(mut r#type: TokenType, mut message: &str) {
     unsafe { errorAtCurrent(message) };
 }
 //< Compiling Expressions consume
+//> Global Variables check
+unsafe fn check(mut r#type: TokenType) -> bool {
+    return unsafe { parser.current.r#type.clone() } as u8 == r#type as u8;
+}
+//< Global Variables check
+//> Global Variables match
+unsafe fn r#match(mut r#type: TokenType) -> bool {
+    if !unsafe { check(r#type) } { return false; }
+    unsafe { advance() };
+    return true;
+}
+//< Global Variables match
 //> Compiling Expressions emit-byte
 unsafe fn emitByte(mut byte: u8) {
     unsafe { writeChunk(unsafe { currentChunk() }, byte, unsafe { parser.previous.line }) };
@@ -206,12 +223,38 @@ unsafe fn endCompiler() {
 //> Compiling Expressions forward-declarations
 
 // no need to forward declare expression
+//> Global Variables forward-declarations
+// no need to forward declare statement
+// no need to forward declare declaration
+//< Global Variables forward-declarations
 // no need to forward declare getRule
 // no need to forward declare parsePrecedence
 
 //< Compiling Expressions forward-declarations
+//> Global Variables identifier-constant
+unsafe fn identifierConstant(mut name: *mut Token) -> u8 {
+    return unsafe { makeConstant(OBJ_VAL!(unsafe { copyString(
+        unsafe { (*name).start }, unsafe { (*name).length }) })) };
+}
+//< Global Variables identifier-constant
+//> Global Variables parse-variable
+unsafe fn parseVariable(mut errorMessage: &str) -> u8 {
+    unsafe { consume(TOKEN_IDENTIFIER, errorMessage) };
+    return unsafe { identifierConstant(unsafe { &mut parser.previous } as *mut Token) };
+}
+//< Global Variables parse-variable
+//> Global Variables define-variable
+unsafe fn defineVariable(mut global: u8) {
+    unsafe { emitBytes(OP_DEFINE_GLOBAL as u8, global) };
+}
+//< Global Variables define-variable
 //> Compiling Expressions binary
+/* Compiling Expressions binary < Global Variables binary
 unsafe fn binary() {
+*/
+//> Global Variables binary
+unsafe fn binary(mut _canAssign: bool) {
+//< Global Variables binary
     let mut operatorType: TokenType = unsafe { parser.previous.r#type.clone() };
     let mut rule: *mut ParseRule = getRule(operatorType.clone());
     unsafe { parsePrecedence(unsafe { transmute::<u8, Precedence>(unsafe { (*rule).precedence.clone() } as u8 + 1) }) };
@@ -234,7 +277,12 @@ unsafe fn binary() {
 }
 //< Compiling Expressions binary
 //> Types of Values parse-literal
+/* Types of Values parse-literal < Global Variables parse-literal
 unsafe fn literal() {
+*/
+//> Global Variables parse-literal
+unsafe fn literal(mut _canAssign: bool) {
+//< Global Variables parse-literal
     match unsafe { parser.previous.r#type.clone() } {
         TOKEN_FALSE => unsafe { emitByte(OP_FALSE as u8) },
         TOKEN_NIL => unsafe { emitByte(OP_NIL as u8) },
@@ -244,13 +292,23 @@ unsafe fn literal() {
 }
 //< Types of Values parse-literal
 //> Compiling Expressions grouping
+/* Compiling Expressions grouping < Global Variables grouping
 unsafe fn grouping() {
+*/
+//> Global Variables grouping
+unsafe fn grouping(mut _canAssign: bool) {
+//< Global Variables grouping
     unsafe { expression() };
     unsafe { consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.") };
 }
 //< Compiling Expressions grouping
-//> Compiling Expressions number
+/* Compiling Expressions number < Global Variables number
 unsafe fn number() {
+*/
+//> Compiling Expressions number
+//> Global Variables number
+unsafe fn number(mut _canAssign: bool) {
+//< Global Variables number
     let mut value: f64 = unsafe { str_from_raw_parts!(unsafe { parser.previous.start }, unsafe { parser.previous.length }) }.parse::<f64>().unwrap();
 /* Compiling Expressions number < Types of Values const-number-val
     unsafe { emitConstant(value) };
@@ -260,14 +318,61 @@ unsafe fn number() {
 //< Types of Values const-number-val
 }
 //< Compiling Expressions number
-//> Strings parse-string
+/* Strings parse-string < Global Variables string
 unsafe fn string() {
+*/
+//> Strings parse-string
+//> Global Variables string
+unsafe fn string(mut _canAssign: bool) {
+//< Global Variables string
     unsafe { emitConstant(OBJ_VAL!(unsafe { copyString(unsafe { parser.previous.start.offset(1) },
         unsafe { parser.previous.length - 2 }) })) };
 }
 //< Strings parse-string
+/* Global Variables read-named-variable < Global Variables named-variable-signature
+unsafe fn namedVariable(mut name: Token) {
+*/
+//> Global Variables named-variable-signature
+unsafe fn namedVariable(mut name: Token, mut canAssign: bool) {
+//< Global Variables named-variable-signature
+//> Global Variables read-named-variable
+    let mut arg: u8 = unsafe { identifierConstant(&mut name as *mut Token) };
+/* Global Variables read-named-variable < Global Variables named-variable
+    unsafe { emitBytes(OP_GET_GLOBAL as u8, arg) };
+*/
+//> named-variable
+
+/* Global Variables named-variable < Global Variables named-variable-can-assign
+    if unsafe { r#match(TOKEN_EQUAL) } {
+*/
+//> named-variable-can-assign
+    if canAssign && unsafe { r#match(TOKEN_EQUAL) } {
+//< named-variable-can-assign
+        unsafe { expression() };
+        unsafe { emitBytes(OP_SET_GLOBAL as u8, arg) };
+    } else {
+        unsafe { emitBytes(OP_GET_GLOBAL as u8, arg) };
+    }
+//< named-variable
+}
+//< Global Variables read-named-variable
+/* Global Variables variable-without-assign < Global Variables variable
+unsafe fn variable() {
+    unsafe { namedVariable(unsafe { parser.previous.clone() }) };
+}
+*/
+//> Global Variables variable
+unsafe fn variable(mut canAssign: bool) {
+    unsafe { namedVariable(unsafe { parser.previous.clone() }, canAssign) };
+}
+//< Global Variables variable
 //> Compiling Expressions unary
+/* Compiling Expressions unary < Global Variables unary
 unsafe fn unary() {
+*/
+//> Global Variables unary
+unsafe fn unary(mut _canAssign: bool) {
+//< Global Variables unary
     let mut operatorType: TokenType = unsafe { parser.previous.r#type.clone() };
 
     // Compile the operand.
@@ -291,7 +396,12 @@ unsafe fn unary() {
 //> Compiling Expressions rules
 const COUNT_OF_TOKEN_TYPES: usize = 40; // ::std::mem::variant_count::<TokenType>();
 type ParseRules = [ParseRule; COUNT_OF_TOKEN_TYPES];
+/* Compiling Expressions rules < Global Variables parse-fn-type
 fn null_parse_rule() {}
+*/
+//> Global Variables parse-fn-type
+fn null_parse_rule(mut _canAssign: bool) {}
+//< Global Variables parse-fn-type
 macro_rules! parse_rules {
     (@fn NULL) => { null_parse_rule };
     (@fn $fn:expr) => { $fn };
@@ -346,7 +456,12 @@ static mut rules: ParseRules = parse_rules!{
     [TOKEN_LESS]          = {NULL,     binary, PREC_COMPARISON},
     [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
 //< Types of Values table-comparisons
+/* Compiling Expressions rules < Global Variables table-identifier
     [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
+*/
+//> Global Variables table-identifier
+    [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
+//< Global Variables table-identifier
 /* Compiling Expressions rules < Strings table-string
     [TOKEN_STRING]        = {NULL,     NULL,   PREC_NONE},
 */
@@ -402,14 +517,31 @@ unsafe fn parsePrecedence(mut precedence: Precedence) {
         return;
     }
 
+/* Compiling Expressions precedence-body < Global Variables prefix-rule
     unsafe { prefixRule() };
+*/
+//> Global Variables prefix-rule
+    let mut canAssign: bool = precedence.clone() as u8 <= PREC_ASSIGNMENT as u8;
+    unsafe { prefixRule(canAssign) };
+//< Global Variables prefix-rule
 //> infix
 
     while precedence.clone() as u8 <= unsafe { (*getRule(unsafe { parser.current.r#type.clone() })).precedence.clone() as u8 } {
         unsafe { advance() };
         let mut infixRule: ParseFn = unsafe { (*getRule(unsafe { parser.previous.r#type.clone() })).infix };
+/* Compiling Expressions infix < Global Variables infix-rule
         unsafe { infixRule() };
+*/
+//> Global Variables infix-rule
+        unsafe { infixRule(canAssign) };
+//< Global Variables infix-rule
     }
+//> Global Variables invalid-assign
+
+    if canAssign && unsafe { r#match(TOKEN_EQUAL) } {
+        unsafe { error("Invalid assignment target.") };
+    }
+//< Global Variables invalid-assign
 //< infix
 //< precedence-body
 }
@@ -429,6 +561,88 @@ unsafe fn expression() {
 //< expression-body
 }
 //< Compiling Expressions expression
+//> Global Variables var-declaration
+unsafe fn varDeclaration() {
+    let mut global: u8 = unsafe { parseVariable("Expect variable name.") };
+
+    if unsafe { r#match(TOKEN_EQUAL) } {
+        unsafe { expression() };
+    } else {
+        unsafe { emitByte(OP_NIL as u8) };
+    }
+    unsafe { consume(TOKEN_SEMICOLON,
+        "Expect ';' after variable declaration.") };
+
+    unsafe { defineVariable(global) };
+}
+//< Global Variables var-declaration
+//> Global Variables expression-statement
+unsafe fn expressionStatement() {
+    unsafe { expression() };
+    unsafe { consume(TOKEN_SEMICOLON, "Expect ';' after expression.") };
+    unsafe { emitByte(OP_POP as u8) };
+}
+//< Global Variables expression-statement
+//> Global Variables print-statement
+unsafe fn printStatement() {
+    unsafe { expression() };
+    unsafe { consume(TOKEN_SEMICOLON, "Expect ';' after value.") };
+    unsafe { emitByte(OP_PRINT as u8) };
+}
+//< Global Variables print-statement
+//> Global Variables synchronize
+unsafe fn synchronize() {
+    unsafe { parser.panicMode = false };
+
+    while unsafe { parser.current.r#type.clone() } as u8 != TOKEN_EOF as u8 {
+        if unsafe { parser.previous.r#type.clone() } as u8 == TOKEN_SEMICOLON as u8 { return; }
+        match unsafe { parser.current.r#type.clone() } {
+            | TOKEN_CLASS
+            | TOKEN_FUN
+            | TOKEN_VAR
+            | TOKEN_FOR
+            | TOKEN_IF
+            | TOKEN_WHILE
+            | TOKEN_PRINT
+            | TOKEN_RETURN
+                => return,
+
+            _ => {} // Do nothing.
+        }
+
+        unsafe { advance() };
+    }
+}
+//< Global Variables synchronize
+//> Global Variables declaration
+unsafe fn declaration() {
+//> match-var
+    if unsafe { r#match(TOKEN_VAR) } {
+        unsafe { varDeclaration() };
+    } else {
+        unsafe { statement() };
+    }
+//< match-var
+/* Global Variables declaration < Global Variables match-var
+    unsafe { statement() };
+*/
+//> call-synchronize
+
+    if unsafe { parser.panicMode } { unsafe { synchronize() }; }
+//< call-synchronize
+}
+//< Global Variables declaration
+//> Global Variables statement
+unsafe fn statement() {
+    if unsafe { r#match(TOKEN_PRINT) } {
+        unsafe { printStatement() };
+//> parse-expressions-statement
+    } else {
+        unsafe { expressionStatement() };
+//< parse-expressions-statement
+    }
+}
+//< Global Variables statement
 
 /* Scanning on Demand compiler-c < Compiling Expressions compile-signature
 pub unsafe fn compile(mut source: *const u8) {
@@ -464,9 +678,18 @@ pub unsafe fn compile(mut source: *const u8, mut chunk: *mut Chunk) -> bool {
 
 //< init-parser-error
     unsafe { advance() };
+//< Compiling Expressions compile-chunk
+/* Compiling Expressions compile-chunk < Global Variables compile
     unsafe { expression() };
     unsafe { consume(TOKEN_EOF, "Expect end of expression.") };
-//< Compiling Expressions compile-chunk
+*/
+//> Global Variables compile
+
+    while !unsafe { r#match(TOKEN_EOF) } {
+        unsafe { declaration() };
+    }
+
+//< Global Variables compile
 //> Compiling Expressions finish-compile
     unsafe { endCompiler() };
 //< Compiling Expressions finish-compile

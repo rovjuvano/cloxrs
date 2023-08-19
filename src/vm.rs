@@ -50,6 +50,9 @@ pub struct VM {
     pub stack: [Value; STACK_MAX as usize],
     pub stackTop: *mut Value,
 //< vm-stack
+//> Global Variables vm-globals
+    pub globals: Table,
+//< Global Variables vm-globals
 //> Hash Tables vm-strings
     pub strings: Table,
 //< Hash Tables vm-strings
@@ -117,12 +120,19 @@ pub unsafe fn initVM() {
 //> Strings init-objects-root
     unsafe { vm.objects = null_mut() };
 //< Strings init-objects-root
+//> Global Variables init-globals
+
+    unsafe { initTable(unsafe { &mut vm.globals } as *mut Table) };
+//< Global Variables init-globals
 //> Hash Tables init-strings
     unsafe { initTable(unsafe { &mut vm.strings } as *mut Table) };
 //< Hash Tables init-strings
 }
 
 pub unsafe fn freeVM() {
+//> Global Variables free-globals
+    unsafe { freeTable(unsafe { &mut vm.globals } as *mut Table) };
+//< Global Variables free-globals
 //> Hash Tables free-strings
     unsafe { freeTable(unsafe { &mut vm.strings } as *mut Table) };
 //< Hash Tables free-strings
@@ -198,6 +208,11 @@ unsafe fn run() -> InterpretResult {
         }};
     }
 //< read-constant
+//> Global Variables read-string
+    macro_rules! READ_STRING {
+        () => {{ unsafe { AS_STRING!(unsafe { READ_CONSTANT!() }) } }};
+    }
+//< Global Variables read-string
 /* A Virtual Machine binary-op < Types of Values binary-op
     macro_rules! BINARY_OP {
         ($op:tt) => {{
@@ -267,6 +282,39 @@ unsafe fn run() -> InterpretResult {
             OP_TRUE => unsafe { push(BOOL_VAL!(true)) },
             OP_FALSE => unsafe { push(BOOL_VAL!(false)) },
 //< Types of Values interpret-literals
+//> Global Variables interpret-pop
+            OP_POP => { let _ = unsafe { pop() }; }
+//< Global Variables interpret-pop
+//> Global Variables interpret-get-global
+            OP_GET_GLOBAL => {
+                let mut name: *mut ObjString = unsafe { READ_STRING!() };
+                let mut value: Value = unsafe { uninit::<Value>() };
+                if !unsafe { tableGet(unsafe { &mut vm.globals } as *mut Table, name, &mut value as *mut Value) } {
+                    unsafe { runtimeError(format_args!("Undefined variable '{}'.", unsafe {
+                        str_from_raw_parts!(unsafe { (*name).chars }, unsafe { (*name).length }) })) };
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                unsafe { push(value) };
+            }
+//< Global Variables interpret-get-global
+//> Global Variables interpret-define-global
+            OP_DEFINE_GLOBAL => {
+                let mut name: *mut ObjString = unsafe { READ_STRING!() };
+                let _ = unsafe { tableSet(unsafe { &mut vm.globals } as *mut Table, name, unsafe { peek(0) }) };
+                let _ = unsafe { pop() };
+            }
+//< Global Variables interpret-define-global
+//> Global Variables interpret-set-global
+            OP_SET_GLOBAL => {
+                let mut name: *mut ObjString = unsafe { READ_STRING!() };
+                if unsafe { tableSet(unsafe { &mut vm.globals } as *mut Table, name, unsafe { peek(0) }) } {
+                    let _ = unsafe { tableDelete(unsafe { &mut vm.globals } as *mut Table, name) }; // [delete]
+                    unsafe { runtimeError(format_args!("Undefined variable '{}'.", unsafe {
+                        str_from_raw_parts!(unsafe { (*name).chars }, unsafe { (*name).length }) })) };
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+            }
+//< Global Variables interpret-set-global
 //> Types of Values interpret-equal
             OP_EQUAL => {
                 let mut b: Value = unsafe { pop() };
@@ -324,11 +372,20 @@ unsafe fn run() -> InterpretResult {
                 unsafe { push(NUMBER_VAL!(-unsafe { AS_NUMBER!(unsafe { pop() }) })) };
             }
 //< Types of Values op-negate
-            OP_RETURN => {
-//> print-return
+//> Global Variables interpret-print
+            OP_PRINT => {
                 unsafe { printValue(unsafe { pop() }) };
                 print!("\n");
-//< print-return
+            }
+//< Global Variables interpret-print
+            OP_RETURN => {
+/* A Virtual Machine print-return < Global Variables op-return
+                unsafe { printValue(unsafe { pop() }) };
+                print!("\n");
+*/
+//> Global Variables op-return
+                // Exit interpreter.
+//< Global Variables op-return
                 return INTERPRET_OK;
             }
         };
@@ -338,6 +395,9 @@ unsafe fn run() -> InterpretResult {
 //> undef-read-constant
 // no need to undefine READ_CONSTANT
 //< undef-read-constant
+//> Global Variables undef-read-string
+// no need to undefine READ_STRING
+//< Global Variables undef-read-string
 //> undef-binary-op
 // no need to undefine BINARY_OP
 //< undef-binary-op

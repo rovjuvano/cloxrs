@@ -102,7 +102,9 @@ unsafe fn findEntry(mut entries: *mut Entry, mut capacity: isize,
 }
 //< find-entry
 //> table-get
+/* Hash Tables table-get < Global Variables interpret-get-global
 #[allow(dead_code)]
+*/
 pub unsafe fn tableGet(mut table: *mut Table, mut key: *mut ObjString, mut value: *mut Value) -> bool {
     if unsafe { (*table).count } == 0 { return false; }
 
@@ -169,7 +171,9 @@ pub unsafe fn tableSet(mut table: *mut Table, mut key: *mut ObjString, mut value
 }
 //< table-set
 //> table-delete
+/* Hash Tables table-delete < Global Variables interpret-set-global
 #[allow(dead_code)]
+*/
 pub unsafe fn tableDelete(mut table: *mut Table, mut key: *mut ObjString) -> bool {
     if unsafe { (*table).count } == 0 { return false; }
 

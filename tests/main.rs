@@ -114,15 +114,81 @@ mod scanning_on_demand {
     case!(scanning__whitespace);
 }
 */
-//> Compiling Expressions tests
+/* Compiling Expressions tests < Global Variables tests
 mod compiling_expressions {
     use super::case;
     case!(expressions__evaluate);
 }
-//< Compiling Expressions tests
+*/
 //> Types of Values tests
 //< Types of Values tests
 //> Strings tests
 //< Strings tests
 //> Hash Tables tests
 //< Hash Tables tests
+//> Global Variables tests
+mod global_variables {
+    use super::case;
+    case!(assignment__associativity);
+    case!(assignment__global);
+    case!(assignment__grouping);
+    case!(assignment__infix_operator);
+    case!(assignment__prefix_operator);
+    case!(assignment__syntax);
+    case!(assignment__undefined);
+    case!(bool__equality);
+    case!(bool__not);
+    case!(comments__line_at_eof);
+    case!(comments__only_line_comment);
+    case!(comments__only_line_comment_and_line);
+    case!(comments__unicode);
+    case!(empty_file);
+    case!(nil__literal);
+    case!(number__leading_dot);
+    case!(number__literals);
+    case!(number__nan_equality);
+    case!(operator__add);
+    case!(operator__add_bool_nil);
+    case!(operator__add_bool_num);
+    case!(operator__add_bool_string);
+    case!(operator__add_nil_nil);
+    case!(operator__add_num_nil);
+    case!(operator__add_string_nil);
+    case!(operator__comparison);
+    case!(operator__divide);
+    case!(operator__divide_nonnum_num);
+    case!(operator__divide_num_nonnum);
+    case!(operator__equals);
+    case!(operator__greater_nonnum_num);
+    case!(operator__greater_num_nonnum);
+    case!(operator__greater_or_equal_nonnum_num);
+    case!(operator__greater_or_equal_num_nonnum);
+    case!(operator__less_nonnum_num);
+    case!(operator__less_num_nonnum);
+    case!(operator__less_or_equal_nonnum_num);
+    case!(operator__less_or_equal_num_nonnum);
+    case!(operator__multiply);
+    case!(operator__multiply_nonnum_num);
+    case!(operator__multiply_num_nonnum);
+    case!(operator__negate);
+    case!(operator__negate_nonnum);
+    case!(operator__not_equals);
+    case!(operator__subtract);
+    case!(operator__subtract_nonnum_num);
+    case!(operator__subtract_num_nonnum);
+    case!(precedence);
+    case!(print__missing_argument);
+    case!(string__error_after_multiline);
+    case!(string__literals);
+    case!(string__multiline);
+    case!(string__unterminated);
+    case!(variable__redeclare_global);
+    case!(variable__redefine_global);
+    case!(variable__undefined_global);
+    case!(variable__uninitialized);
+    case!(variable__use_false_as_var);
+    case!(variable__use_global_in_initializer);
+    case!(variable__use_nil_as_var);
+    case!(variable__use_this_as_var);
+}
+//< Global Variables tests
