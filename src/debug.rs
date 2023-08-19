@@ -156,6 +156,10 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_LOOP =>
             unsafe { jumpInstruction("OP_LOOP", -1, chunk, offset) },
 //< Jumping Back and Forth disassemble-loop
+//> Calls and Functions disassemble-call
+        OP_CALL =>
+            unsafe { byteInstruction("OP_CALL", chunk, offset) },
+//< Calls and Functions disassemble-call
         OP_RETURN =>
             simpleInstruction("OP_RETURN", offset),
         #[allow(unreachable_patterns)]

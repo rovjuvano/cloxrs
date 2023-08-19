@@ -84,6 +84,18 @@ pub unsafe fn reallocate(mut pointer: *mut u8, mut oldSize: usize, mut newSize: 
 //> Strings free-object
 unsafe fn freeObject(mut object: *mut Obj) {
     match unsafe { (*object).r#type.clone() } {
+//> Calls and Functions free-function
+        OBJ_FUNCTION => {
+            let mut function: *mut ObjFunction = object as *mut ObjFunction;
+            unsafe { freeChunk(unsafe { &mut (*function).chunk } as *mut Chunk) };
+            let _ = unsafe { FREE!(ObjFunction, object) };
+        }
+//< Calls and Functions free-function
+//> Calls and Functions free-native
+        OBJ_NATIVE => {
+            let _ = unsafe { FREE!(ObjNative, object) };
+        }
+//< Calls and Functions free-native
         OBJ_STRING => {
             let mut string: *mut ObjString = object as *mut ObjString;
             let _ = unsafe { FREE_ARRAY!(u8, unsafe { (*string).chars }, unsafe { (*string).length + 1 }) };

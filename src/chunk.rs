@@ -75,6 +75,9 @@ pub enum OpCode {
 //> Jumping Back and Forth loop-op
     OP_LOOP,
 //< Jumping Back and Forth loop-op
+//> Calls and Functions op-call
+    OP_CALL,
+//< Calls and Functions op-call
     OP_RETURN,
 }
 pub use OpCode::*;

@@ -5,6 +5,9 @@ use ::std::*;
 use crate::memory::*;
 //> Strings object-h
 pub use crate::common::*;
+//> Calls and Functions object-include-chunk
+pub use crate::chunk::*;
+//< Calls and Functions object-include-chunk
 pub use crate::value::*;
 //> obj-type-macro
 
@@ -18,6 +21,20 @@ pub(crate) use OBJ_TYPE;
 //< obj-type-macro
 //> is-string
 
+//> Calls and Functions is-function
+#[allow(unused_macros)]
+macro_rules! IS_FUNCTION {
+    ($value:expr) => { isObjType($value.clone(), OBJ_FUNCTION) };
+}
+pub(crate) use IS_FUNCTION;
+//< Calls and Functions is-function
+//> Calls and Functions is-native
+#[allow(unused_macros)]
+macro_rules! IS_NATIVE {
+    ($value:expr) => { isObjType($value.clone(), OBJ_NATIVE) };
+}
+pub(crate) use IS_NATIVE;
+//< Calls and Functions is-native
 macro_rules! IS_STRING {
     ($value:expr) => { isObjType($value.clone(), OBJ_STRING) };
 }
@@ -25,6 +42,24 @@ pub(crate) use IS_STRING;
 //< is-string
 //> as-string
 
+//> Calls and Functions as-function
+macro_rules! AS_FUNCTION {
+    ($value:expr) => {{
+        let value = $value;
+        unsafe { AS_OBJ!(value) as *mut ObjFunction }
+    }};
+}
+pub(crate) use AS_FUNCTION;
+//< Calls and Functions as-function
+//> Calls and Functions as-native
+macro_rules! AS_NATIVE {
+    ($value:expr) => {{
+        let value = $value;
+        unsafe { (*(AS_OBJ!(value) as *mut ObjNative)).function }
+    }};
+}
+pub(crate) use AS_NATIVE;
+//< Calls and Functions as-native
 macro_rules! AS_STRING {
     ($value:expr) => {{
         let value = $value;
@@ -46,6 +81,12 @@ pub(crate) use AS_STR;
 #[derive(Clone)] // Copy, Eq, Ord too but made explicit
 #[repr(u8)]
 pub enum ObjType {
+//> Calls and Functions obj-type-function
+    OBJ_FUNCTION,
+//< Calls and Functions obj-type-function
+//> Calls and Functions obj-type-native
+    OBJ_NATIVE,
+//< Calls and Functions obj-type-native
     OBJ_STRING,
 }
 pub use ObjType::*;
@@ -59,6 +100,28 @@ pub struct Obj {
     pub next: *mut Obj,
 //< next-field
 }
+//> Calls and Functions obj-function
+
+#[derive(Clone)] // Copy too but made explicit
+#[repr(C)]
+pub struct ObjFunction {
+    pub obj: Obj,
+    pub arity: isize,
+    pub chunk: Chunk,
+    pub name: *mut ObjString,
+}
+//< Calls and Functions obj-function
+//> Calls and Functions obj-native
+
+pub type NativeFn = unsafe fn(argCount: isize, args: *mut Value) -> Value;
+
+#[derive(Clone)] // Copy too but made explicit
+#[repr(C)]
+pub struct ObjNative {
+    pub obj: Obj,
+    pub function: NativeFn,
+}
+//< Calls and Functions obj-native
 //> obj-string
 
 #[derive(Clone)] // Copy too but made explicit
@@ -73,6 +136,12 @@ pub struct ObjString {
 }
 //< obj-string
 
+//> Calls and Functions new-function-h
+// no need to forward declare newFunction
+//< Calls and Functions new-function-h
+//> Calls and Functions new-native-h
+// no need to forward declare newNative
+//< Calls and Functions new-native-h
 //> take-string-h
 // no need to forward declare takeString
 //< take-string-h
@@ -118,6 +187,22 @@ unsafe fn allocateObject(mut size: usize, mut r#type: ObjType) -> *mut Obj {
     return object;
 }
 //< allocate-object
+//> Calls and Functions new-function
+pub unsafe fn newFunction() -> *mut ObjFunction {
+    let mut function: *mut ObjFunction = unsafe { ALLOCATE_OBJ!(ObjFunction, OBJ_FUNCTION) };
+    unsafe { (*function).arity = 0 };
+    unsafe { (*function).name = null_mut() };
+    unsafe { initChunk(unsafe { &mut (*function).chunk } as *mut Chunk) };
+    return function;
+}
+//< Calls and Functions new-function
+//> Calls and Functions new-native
+pub fn newNative(mut function: NativeFn) -> *mut ObjNative {
+    let mut native: *mut ObjNative = unsafe { ALLOCATE_OBJ!(ObjNative, OBJ_NATIVE) };
+    unsafe { (*native).function = function };
+    return native;
+}
+//< Calls and Functions new-native
 
 /* Strings allocate-string < Hash Tables allocate-string
 unsafe fn allocateString(mut chars: *mut u8, mut length: isize) -> *mut ObjString {
@@ -189,9 +274,30 @@ pub unsafe fn copyString(mut chars: *const u8, mut length: isize) -> *mut ObjStr
     return unsafe { allocateString(heapChars, length, hash) };
 //< Hash Tables copy-string-allocate
 }
+//> Calls and Functions print-function-helper
+unsafe fn printFunction(mut function: *mut ObjFunction) {
+//> print-script
+    if unsafe { (*function).name }.is_null() {
+        print!("<script>");
+        return;
+    }
+//< print-script
+    print!("<fn {}>", unsafe { str_from_raw_parts!(unsafe { (*(*function).name).chars }, unsafe { (*(*function).name).length }) });
+}
+//< Calls and Functions print-function-helper
 //> print-object
 pub unsafe fn printObject(mut value: Value) {
     match unsafe { OBJ_TYPE!(value.clone()) } {
+//> Calls and Functions print-function
+        OBJ_FUNCTION => {
+            unsafe { printFunction(unsafe { AS_FUNCTION!(value) }) };
+        }
+//< Calls and Functions print-function
+//> Calls and Functions print-native
+        OBJ_NATIVE => {
+            print!("<native fn>");
+        }
+//< Calls and Functions print-native
         OBJ_STRING => {
             print!("{}", unsafe { AS_STR!(value) });
         }

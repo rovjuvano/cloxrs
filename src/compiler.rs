@@ -28,9 +28,12 @@ pub use crate::vm::*;
 /* Scanning on Demand compiler-h < Compiling Expressions compile-h
 // no need to forward declare compile
 */
-//> Compiling Expressions compile-h
+/* Compiling Expressions compile-h < Calls and Functions compile-h
 // no need to forward declare compile
-//< Compiling Expressions compile-h
+*/
+//> Calls and Functions compile-h
+// no need to forward declare compile
+//< Calls and Functions compile-h
 //< Scanning on Demand compiler-h
 use crate::scanner::*;
 //> Compiling Expressions include-debug
@@ -38,13 +41,13 @@ use crate::scanner::*;
 #[cfg(DEBUG_PRINT_CODE)]
 use crate::debug::*;
 //< Compiling Expressions include-debug
-//> Compiling Expressions compile-h
+/* Compiling Expressions compile-h < Calls and Functions object-include-chunk
 // A missing include which the compiler can in some cases resolve among the
 // circular dependencies of the indiscriminate wildcard imports and exports.
 // As clox doesn't have this, only including when the compiler needs it.
 #[cfg(not(DEBUG_PRINT_CODE))]
 use crate::chunk::*;
-//< Compiling Expressions compile-h
+*/
 //> Compiling Expressions parser
 
 #[derive(Clone)] // Copy too but made explicit
@@ -117,10 +120,30 @@ struct Local {
     pub depth: isize,
 }
 //< Local Variables local-struct
+//> Calls and Functions function-type-enum
+#[derive(Clone)] // Copy, Eq, Ord too but made explicit
+#[repr(u8)]
+enum FunctionType {
+    TYPE_FUNCTION,
+    TYPE_SCRIPT,
+}
+use FunctionType::*;
+//< Calls and Functions function-type-enum
 //> Local Variables compiler-struct
 
 #[derive(Clone)] // Copy too but made explicit
+/* Local Variables compiler-struct < Calls and Functions enclosing-field
 struct Compiler {
+*/
+//> Calls and Functions enclosing-field
+struct Compiler {
+    pub enclosing: *mut Compiler,
+//< Calls and Functions enclosing-field
+//> Calls and Functions function-fields
+    pub function: *mut ObjFunction,
+    pub r#type: FunctionType,
+
+//< Calls and Functions function-fields
     pub locals: [Local; UINT8_COUNT as usize],
     pub localCount: isize,
     pub scopeDepth: isize,
@@ -133,11 +156,19 @@ static mut parser: Parser = unsafe { uninit_static!(Parser) };
 static mut current: *mut Compiler = null_mut();
 //< Local Variables current-compiler
 //> Compiling Expressions compiling-chunk
+/* Compiling Expressions compiling-chunk < Calls and Functions current-chunk
 static mut compilingChunk: *mut Chunk = null_mut();
 
 unsafe fn currentChunk() -> *mut Chunk {
     return unsafe { compilingChunk };
 }
+*/
+//> Calls and Functions current-chunk
+
+unsafe fn currentChunk() -> *mut Chunk {
+    return unsafe { &mut (*(*current).function).chunk } as *mut Chunk;
+}
+//< Calls and Functions current-chunk
 
 //< Compiling Expressions compiling-chunk
 //> Compiling Expressions error-at
@@ -239,6 +270,9 @@ unsafe fn emitJump(mut instruction: OpCode) -> isize {
 //< Jumping Back and Forth emit-jump
 //> Compiling Expressions emit-return
 unsafe fn emitReturn() {
+//> Calls and Functions return-nil
+    unsafe { emitByte(OP_NIL as u8) };
+//< Calls and Functions return-nil
     unsafe { emitByte(OP_RETURN as u8) };
 }
 //< Compiling Expressions emit-return
@@ -272,21 +306,72 @@ unsafe fn patchJump(mut offset: isize) {
 }
 //< Jumping Back and Forth patch-jump
 //> Local Variables init-compiler
+/* Local Variables init-compiler < Calls and Functions init-compiler
 unsafe fn initCompiler(mut compiler: *mut Compiler) {
+*/
+//> Calls and Functions init-compiler
+unsafe fn initCompiler(mut compiler: *mut Compiler, mut r#type: FunctionType) {
+//> store-enclosing
+    unsafe { (*compiler).enclosing = current };
+//< store-enclosing
+    unsafe { (*compiler).function = null_mut() };
+    unsafe { (*compiler).r#type = r#type.clone() };
+//< Calls and Functions init-compiler
     unsafe { (*compiler).localCount = 0 };
     unsafe { (*compiler).scopeDepth = 0 };
+//> Calls and Functions init-function
+    unsafe { (*compiler).function = unsafe { newFunction() } };
+//< Calls and Functions init-function
     unsafe { current = compiler };
+//> Calls and Functions init-function-name
+    if r#type.clone() as u8 != TYPE_SCRIPT as u8 {
+        unsafe { (*(*current).function).name = unsafe { copyString(
+            unsafe { parser.previous.start }, unsafe { parser.previous.length }) } };
+    }
+//< Calls and Functions init-function-name
+//> Calls and Functions init-function-slot
+
+    let mut local: *mut Local = unsafe { &mut (*current).locals[unsafe { (*current).localCount } as usize] } as *mut Local;
+    unsafe { (*current).localCount += 1 };
+    unsafe { (*local).depth = 0 };
+    unsafe { (*local).name.start = "".as_ptr() };
+    unsafe { (*local).name.length = 0 };
+//< Calls and Functions init-function-slot
 }
 //< Local Variables init-compiler
 //> Compiling Expressions end-compiler
+/* Compiling Expressions end-compiler < Calls and Functions end-compiler
 unsafe fn endCompiler() {
+*/
+//> Calls and Functions end-compiler
+unsafe fn endCompiler() -> *mut ObjFunction {
+//< Calls and Functions end-compiler
     unsafe { emitReturn() };
+//> Calls and Functions end-function
+    let mut function: *mut ObjFunction = unsafe { (*current).function };
+
+//< Calls and Functions end-function
 //> dump-chunk
     #[cfg(DEBUG_PRINT_CODE)]
     if !unsafe { parser.hadError } {
+/* Compiling Expressions dump-chunk < Calls and Functions disassemble-end
         unsafe { disassembleChunk(unsafe { currentChunk() }, "code") };
+*/
+//> Calls and Functions disassemble-end
+        unsafe { disassembleChunk(unsafe { currentChunk() },
+            if unsafe { (*function).name }.is_null() { "script" }
+            else { unsafe { str_from_raw_parts!(unsafe { (*(*function).name).chars }, unsafe { (*(*function).name).length }) } }
+        ) };
+//< Calls and Functions disassemble-end
     }
 //< dump-chunk
+//> Calls and Functions return-function
+
+//> restore-enclosing
+    unsafe { current = unsafe { (*current).enclosing } };
+//< restore-enclosing
+    return function;
+//< Calls and Functions return-function
 }
 //< Compiling Expressions end-compiler
 //> Local Variables begin-scope
@@ -403,6 +488,9 @@ unsafe fn parseVariable(mut errorMessage: &str) -> u8 {
 //< Global Variables parse-variable
 //> Local Variables mark-initialized
 unsafe fn markInitialized() {
+//> Calls and Functions check-depth
+    if unsafe { (*current).scopeDepth } == 0 { return; }
+//< Calls and Functions check-depth
     unsafe { (*current).locals[unsafe { (*current).localCount } as usize - 1].depth =
         unsafe { (*current).scopeDepth } };
 }
@@ -421,6 +509,25 @@ unsafe fn defineVariable(mut global: u8) {
     unsafe { emitBytes(OP_DEFINE_GLOBAL as u8, global) };
 }
 //< Global Variables define-variable
+//> Calls and Functions argument-list
+unsafe fn argumentList() -> u8 {
+    let mut argCount: u8 = 0;
+    if !unsafe { check(TOKEN_RIGHT_PAREN) } {
+        loop {
+            unsafe { expression() };
+//> arg-limit
+            if argCount == 255 {
+                unsafe { error("Can't have more than 255 arguments.") };
+            }
+//< arg-limit
+            argCount = u8::overflowing_add(argCount, 1).0;
+            if !unsafe { r#match(TOKEN_COMMA) } { break; }
+        }
+    }
+    unsafe { consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.") };
+    return argCount;
+}
+//< Calls and Functions argument-list
 //> Jumping Back and Forth and
 unsafe fn and(mut _canAssign: bool) {
     let mut endJump: isize = unsafe { emitJump(OP_JUMP_IF_FALSE) };
@@ -459,6 +566,12 @@ unsafe fn binary(mut _canAssign: bool) {
     }
 }
 //< Compiling Expressions binary
+//> Calls and Functions compile-call
+unsafe fn call(mut _canAssign: bool) {
+    let mut argCount: u8 = unsafe { argumentList() };
+    unsafe { emitBytes(OP_CALL as u8, argCount) };
+}
+//< Calls and Functions compile-call
 //> Types of Values parse-literal
 /* Types of Values parse-literal < Global Variables parse-literal
 unsafe fn literal() {
@@ -638,7 +751,12 @@ macro_rules! parse_rules {
     }};
 }
 static mut rules: ParseRules = parse_rules!{
+/* Compiling Expressions rules < Calls and Functions infix-left-paren
     [TOKEN_LEFT_PAREN]    = {grouping, NULL,   PREC_NONE},
+*/
+//> Calls and Functions infix-left-paren
+    [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
+//< Calls and Functions infix-left-paren
     [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
     [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, // [big]
     [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
@@ -800,6 +918,42 @@ unsafe fn block() {
     unsafe { consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.") };
 }
 //< Local Variables block
+//> Calls and Functions compile-function
+unsafe fn function(mut r#type: FunctionType) {
+    let mut compiler: Compiler = unsafe { uninit::<Compiler>() };
+    unsafe { initCompiler(&mut compiler as *mut Compiler, r#type) };
+    unsafe { beginScope() }; // [no-end-scope]
+
+    unsafe { consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.") };
+//> parameters
+    if !unsafe { check(TOKEN_RIGHT_PAREN) } {
+        loop {
+            unsafe { (*(*current).function).arity += 1 };
+            if unsafe { (*(*current).function).arity } > 255 {
+                unsafe { errorAtCurrent("Can't have more than 255 parameters.") };
+            }
+            let mut constant: u8 = unsafe { parseVariable("Expect parameter name.") };
+            unsafe { defineVariable(constant) };
+            if !unsafe { r#match(TOKEN_COMMA) } { break; }
+        }
+    }
+//< parameters
+    unsafe { consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.") };
+    unsafe { consume(TOKEN_LEFT_BRACE, "Expect '{' before function body.") };
+    unsafe { block() };
+
+    let mut function: *mut ObjFunction = unsafe { endCompiler() };
+    unsafe { emitBytes(OP_CONSTANT as u8, unsafe { makeConstant(OBJ_VAL!(function)) }) };
+}
+//< Calls and Functions compile-function
+//> Calls and Functions fun-declaration
+unsafe fn funDeclaration() {
+    let mut global: u8 = unsafe { parseVariable("Expect function name.") };
+    unsafe { markInitialized() };
+    unsafe { function(TYPE_FUNCTION) };
+    unsafe { defineVariable(global) };
+}
+//< Calls and Functions fun-declaration
 //> Global Variables var-declaration
 unsafe fn varDeclaration() {
     let mut global: u8 = unsafe { parseVariable("Expect variable name.") };
@@ -925,6 +1079,23 @@ unsafe fn printStatement() {
     unsafe { emitByte(OP_PRINT as u8) };
 }
 //< Global Variables print-statement
+//> Calls and Functions return-statement
+unsafe fn returnStatement() {
+//> return-from-script
+    if unsafe { (*current).r#type.clone() as u8 } == TYPE_SCRIPT as u8 {
+        unsafe { error("Can't return from top-level code.") };
+    }
+
+//< return-from-script
+    if unsafe { r#match(TOKEN_SEMICOLON) } {
+        unsafe { emitReturn() };
+    } else {
+        unsafe { expression() };
+        unsafe { consume(TOKEN_SEMICOLON, "Expect ';' after return value.") };
+        unsafe { emitByte(OP_RETURN as u8) };
+    }
+}
+//< Calls and Functions return-statement
 //> Jumping Back and Forth while-statement
 unsafe fn whileStatement() {
 //> loop-start
@@ -971,8 +1142,15 @@ unsafe fn synchronize() {
 //< Global Variables synchronize
 //> Global Variables declaration
 unsafe fn declaration() {
-//> match-var
+//> Calls and Functions match-fun
+    if unsafe { r#match(TOKEN_FUN) } {
+        unsafe { funDeclaration() };
+/* Global Variables match-var < Calls and Functions match-fun
     if unsafe { r#match(TOKEN_VAR) } {
+*/
+    } else if unsafe { r#match(TOKEN_VAR) } {
+//< Calls and Functions match-fun
+//> match-var
         unsafe { varDeclaration() };
     } else {
         unsafe { statement() };
@@ -999,6 +1177,10 @@ unsafe fn statement() {
     } else if unsafe { r#match(TOKEN_IF) } {
         unsafe { ifStatement() };
 //< Jumping Back and Forth parse-if
+//> Calls and Functions match-return
+    } else if unsafe { r#match(TOKEN_RETURN) } {
+        unsafe { returnStatement() };
+//< Calls and Functions match-return
 //> Jumping Back and Forth parse-while
     } else if unsafe { r#match(TOKEN_WHILE) } {
         unsafe { whileStatement() };
@@ -1020,9 +1202,12 @@ unsafe fn statement() {
 /* Scanning on Demand compiler-c < Compiling Expressions compile-signature
 pub unsafe fn compile(mut source: *const u8) {
 */
-//> Compiling Expressions compile-signature
+/* Compiling Expressions compile-signature < Calls and Functions compile-signature
 pub unsafe fn compile(mut source: *const u8, mut chunk: *mut Chunk) -> bool {
-//< Compiling Expressions compile-signature
+*/
+//> Calls and Functions compile-signature
+pub unsafe fn compile(mut source: *const u8) -> *mut ObjFunction {
+//< Calls and Functions compile-signature
     unsafe { initScanner(source) };
 /* Scanning on Demand dump-tokens < Compiling Expressions compile-chunk
     let mut line: isize = -1;
@@ -1042,11 +1227,16 @@ pub unsafe fn compile(mut source: *const u8, mut chunk: *mut Chunk) -> bool {
 */
 //> Local Variables compiler
     let mut compiler: *mut Compiler = unsafe { &mut uninit::<Compiler>() } as *mut Compiler;
-    unsafe { initCompiler(compiler) };
 //< Local Variables compiler
-//> Compiling Expressions init-compile-chunk
+/* Local Variables compiler < Calls and Functions call-init-compiler
+    unsafe { initCompiler(compiler) };
+*/
+//> Calls and Functions call-init-compiler
+    unsafe { initCompiler(compiler, TYPE_SCRIPT) };
+//< Calls and Functions call-init-compiler
+/* Compiling Expressions init-compile-chunk < Calls and Functions call-init-compiler
     unsafe { compilingChunk = chunk };
-//< Compiling Expressions init-compile-chunk
+*/
 //> Compiling Expressions compile-chunk
 //> init-parser-error
 
@@ -1067,10 +1257,14 @@ pub unsafe fn compile(mut source: *const u8, mut chunk: *mut Chunk) -> bool {
     }
 
 //< Global Variables compile
-//> Compiling Expressions finish-compile
+/* Compiling Expressions finish-compile < Calls and Functions call-end-compiler
     unsafe { endCompiler() };
-//< Compiling Expressions finish-compile
-//> Compiling Expressions return-had-error
+*/
+/* Compiling Expressions return-had-error < Calls and Functions call-end-compiler
     return !unsafe { parser.hadError };
-//< Compiling Expressions return-had-error
+*/
+//> Calls and Functions call-end-compiler
+    let mut function: *mut ObjFunction = unsafe { endCompiler() };
+    return if unsafe { parser.hadError } { null_mut() } else { function };
+//< Calls and Functions call-end-compiler
 }

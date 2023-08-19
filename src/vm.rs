@@ -1,4 +1,7 @@
 //> A Virtual Machine vm-c
+//> Calls and Functions runtime-error-stack
+use ::core::iter::*;
+//< Calls and Functions runtime-error-stack
 use ::core::mem::*;
 //> Strings concatenate
 use ::core::ptr::*;
@@ -11,6 +14,9 @@ use ::std::*;
 //> Strings vm-include-string
 // no need for additional includes here
 //< Strings vm-include-string
+//> Calls and Functions vm-include-time
+use ::std::time::*;
+//< Calls and Functions vm-include-time
 
 //< vm-include-stdio
 #[allow(unused_imports)]
@@ -28,7 +34,12 @@ use crate::object::*;
 use crate::memory::*;
 //< Strings vm-include-object-memory
 //> A Virtual Machine vm-h
+/* A Virtual Machine vm-h < Calls and Functions vm-include-object
 pub use crate::chunk::*;
+*/
+//> Calls and Functions vm-include-object
+pub use crate::object::*;
+//< Calls and Functions vm-include-object
 //> Hash Tables vm-include-table
 pub use crate::table::*;
 //< Hash Tables vm-include-table
@@ -37,15 +48,37 @@ pub use crate::value::*;
 //< vm-include-value
 //> stack-max
 
-pub const STACK_MAX: isize = 256;
 //< stack-max
+/* A Virtual Machine stack-max < Calls and Functions frame-max
+pub const STACK_MAX: isize = 256;
+*/
+//> Calls and Functions frame-max
+pub const FRAMES_MAX: isize = 64;
+pub const STACK_MAX: isize = FRAMES_MAX * UINT8_COUNT;
+//< Calls and Functions frame-max
+//> Calls and Functions call-frame
+
+#[derive(Clone)] // Copy too but made explicit
+pub struct CallFrame {
+    pub function: *mut ObjFunction,
+    pub ip: *mut u8,
+    pub slots: *mut Value,
+}
+//< Calls and Functions call-frame
 
 #[derive(Clone)] // Copy too but made explicit
 pub struct VM {
+/* A Virtual Machine vm-h < Calls and Functions frame-array
     pub chunk: *mut Chunk,
-//> ip
+*/
+/* A Virtual Machine ip < Calls and Functions frame-array
     pub ip: *mut u8,
-//< ip
+*/
+//> Calls and Functions frame-array
+    pub frames: [CallFrame; FRAMES_MAX as usize],
+    pub frameCount: isize,
+
+//< Calls and Functions frame-array
 //> vm-stack
     pub stack: [Value; STACK_MAX as usize],
     pub stackTop: *mut Value,
@@ -97,21 +130,64 @@ pub use InterpretResult::*;
 //< A Virtual Machine vm-h
 
 pub static mut vm: VM = unsafe { uninit_static!(VM) }; // [one]
+//> Calls and Functions clock-native
+static mut startTime: Instant = unsafe { uninit_static!(Instant) };
+fn clockNative(mut _argCount: isize, mut _args: *mut Value) -> Value {
+    return NUMBER_VAL!(unsafe { startTime }.elapsed().as_micros() as f64 / 1_000_000.0);
+}
+//< Calls and Functions clock-native
 //> reset-stack
 unsafe fn resetStack() {
     unsafe { vm.stackTop = unsafe { &mut vm.stack } as *mut Value };
+//> Calls and Functions reset-frame-count
+    unsafe { vm.frameCount = 0 };
+//< Calls and Functions reset-frame-count
 }
 //< reset-stack
 //> Types of Values runtime-error
 unsafe fn runtimeError(mut format: fmt::Arguments<'_>) {
     write!(&mut stderr(), "{}\n", format).unwrap();
 
+/* Types of Values runtime-error < Calls and Functions runtime-error-temp
     let mut instruction: isize = unsafe { vm.ip.offset_from(unsafe { (*vm.chunk).code }) } - 1;
     let mut line: isize = unsafe { *(*vm.chunk).lines.offset(instruction) };
+*/
+/* Calls and Functions runtime-error-temp < Calls and Functions runtime-error-stack
+    let mut frame: *mut CallFrame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize - 1] } as *mut CallFrame;
+    let mut instruction: isize = unsafe { (*frame).ip.offset_from(unsafe { (*(*frame).function).chunk.code }) } - 1;
+    let mut line: isize = unsafe { *(*(*frame).function).chunk.lines.offset(instruction) };
+*/
+/* Types of Values runtime-error < Calls and Functions runtime-error-stack
     eprint!("[line {}] in script\n", line);
+*/
+//> Calls and Functions runtime-error-stack
+    for mut i in (0..unsafe { vm.frameCount }).rev() {
+        let mut frame: *mut CallFrame = unsafe { &mut vm.frames[i as usize] } as *mut CallFrame;
+        let mut function: *mut ObjFunction = unsafe { (*frame).function };
+        let mut instruction: isize = unsafe { (*frame).ip.offset_from(unsafe { (*function).chunk.code }) } - 1;
+        eprint!("[line {}] in ", // [minus]
+            unsafe { *(*function).chunk.lines.offset(instruction) });
+        if unsafe { (*function).name }.is_null() {
+            eprint!("script\n");
+        } else {
+            eprint!("{}()\n", unsafe { str_from_raw_parts!(unsafe { (*(*function).name).chars }, unsafe { (*(*function).name).length }) });
+        }
+    }
+
+//< Calls and Functions runtime-error-stack
     unsafe { resetStack() };
 }
 //< Types of Values runtime-error
+//> Calls and Functions define-native
+unsafe fn defineNative(mut name: &str, mut function: NativeFn) {
+    unsafe { push(OBJ_VAL!(unsafe { copyString(name.as_ptr(), name.len() as isize) })) };
+    unsafe { push(OBJ_VAL!(newNative(function))) };
+    let _ = unsafe { tableSet(unsafe { &mut vm.globals } as *mut Table,
+        unsafe { AS_STRING!(unsafe { vm.stack[0].clone() }) }, unsafe { vm.stack[1].clone() }) };
+    let _ = unsafe { pop() };
+    let _ = unsafe { pop() };
+}
+//< Calls and Functions define-native
 
 pub unsafe fn initVM() {
 //> call-reset-stack
@@ -127,6 +203,11 @@ pub unsafe fn initVM() {
 //> Hash Tables init-strings
     unsafe { initTable(unsafe { &mut vm.strings } as *mut Table) };
 //< Hash Tables init-strings
+//> Calls and Functions define-native-clock
+
+    unsafe { startTime = Instant::now() };
+    unsafe { defineNative("clock", clockNative) };
+//< Calls and Functions define-native-clock
 }
 
 pub unsafe fn freeVM() {
@@ -162,6 +243,53 @@ unsafe fn peek(mut distance: isize) -> Value {
     return unsafe { (*vm.stackTop.offset(-1 - distance)).clone() };
 }
 //< Types of Values peek
+//> Calls and Functions call
+unsafe fn call(mut function: *mut ObjFunction, mut argCount: isize) -> bool {
+//> check-arity
+    if argCount != unsafe { (*function).arity } {
+        unsafe { runtimeError(format_args!("Expected {} arguments but got {}.",
+            unsafe { (*function).arity }, argCount)) };
+        return false;
+    }
+
+//< check-arity
+//> check-overflow
+    if unsafe { vm.frameCount } == FRAMES_MAX {
+        unsafe { runtimeError(format_args!("Stack overflow.")) };
+        return false;
+    }
+
+//< check-overflow
+    let mut frame: *mut CallFrame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize] } as *mut CallFrame;
+    unsafe { vm.frameCount += 1 };
+    unsafe { (*frame).function = function };
+    unsafe { (*frame).ip = unsafe { (*function).chunk.code } };
+    unsafe { (*frame).slots = unsafe { vm.stackTop.offset(-argCount - 1) } };
+    return true;
+}
+//< Calls and Functions call
+//> Calls and Functions call-value
+unsafe fn callValue(mut callee: Value, mut argCount: isize) -> bool {
+    if IS_OBJ!(callee) {
+        match unsafe { OBJ_TYPE!(callee.clone()) } {
+            OBJ_FUNCTION => // [switch]
+                return unsafe { call(unsafe { AS_FUNCTION!(callee) }, argCount) },
+//> call-native
+            OBJ_NATIVE => {
+                let mut native: NativeFn = unsafe { AS_NATIVE!(callee) };
+                let mut result: Value = unsafe { native(argCount, unsafe { vm.stackTop.offset(-argCount) }) };
+                unsafe { vm.stackTop = unsafe { vm.stackTop.offset(-argCount - 1) } };
+                unsafe { push(result) };
+                return true;
+            }
+//< call-native
+            _ => {} // Non-callable object type.
+        }
+    }
+    unsafe { runtimeError(format_args!("Can only call functions and classes.")) };
+    return false;
+}
+//< Calls and Functions call-value
 //> Types of Values is-falsey
 fn isFalsey(mut value: Value) -> bool {
     return IS_NIL!(value) || (IS_BOOL!(value) && !unsafe { AS_BOOL!(value) });
@@ -187,6 +315,10 @@ unsafe fn concatenate() {
 #[allow(dead_code)]
 */
 unsafe fn run() -> InterpretResult {
+//> Calls and Functions run
+    let mut frame: *mut CallFrame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize - 1] } as *mut CallFrame;
+
+/* A Virtual Machine run < Calls and Functions run
     macro_rules! READ_BYTE {
         () => {{
             let mut byte: u8 = unsafe { *vm.ip };
@@ -194,21 +326,30 @@ unsafe fn run() -> InterpretResult {
             byte
         }};
     }
-//> read-constant
+*/
+    macro_rules! READ_BYTE {
+        () => {{
+            let mut byte: u8 = unsafe { *(*frame).ip };
+            unsafe { (*frame).ip = unsafe { (*frame).ip.offset(1) } };
+            byte
+        }};
+    }
+/* A Virtual Machine read-constant < Calls and Functions run
     macro_rules! READ_CONSTANT {
         () => {{
-//< read-constant
+*/
 /* A Virtual Machine read-constant < Types of Values value-type
             unsafe { *(*vm.chunk).constants.values.offset(unsafe { READ_BYTE!() } as isize) }
 */
-//> Types of Values value-type
+/* Types of Values value-type < Calls and Functions run
             unsafe { (*(*vm.chunk).constants.values.offset(unsafe { READ_BYTE!() as isize })).clone() }
-//< Types of Values value-type
-//> read-constant
+*/
+/* A Virtual Machine read-constant < Calls and Functions run
         }};
     }
-//< read-constant
-//> Jumping Back and Forth read-short
+*/
+
+/* Jumping Back and Forth read-short < Calls and Functions run
     macro_rules! READ_SHORT {
         () => {{
             let mut short: u16 = ((unsafe { *vm.ip } as u16) << 8) | (unsafe { *vm.ip.offset(1) } as u16);
@@ -216,7 +357,22 @@ unsafe fn run() -> InterpretResult {
             short
         }};
     }
-//< Jumping Back and Forth read-short
+*/
+    macro_rules! READ_SHORT {
+        () => {{
+            let mut short: u16 = ((unsafe { *(*frame).ip } as u16) << 8) | (unsafe { *(*frame).ip.offset(1) } as u16);
+            unsafe { (*frame).ip = unsafe { (*frame).ip.offset(2) } };
+            short
+        }};
+    }
+
+    macro_rules! READ_CONSTANT {
+        () => {{
+            unsafe { (*(*(*frame).function).chunk.constants.values.offset(unsafe { READ_BYTE!() } as isize)).clone() }
+        }};
+    }
+
+//< Calls and Functions run
 //> Global Variables read-string
     macro_rules! READ_STRING {
         () => {{ unsafe { AS_STRING!(unsafe { READ_CONSTANT!() }) } }};
@@ -267,8 +423,15 @@ unsafe fn run() -> InterpretResult {
             }
             print!("\n");
 //< trace-stack
+/* A Virtual Machine trace-execution < Calls and Functions trace-execution
             let _ = unsafe { disassembleInstruction(unsafe { vm.chunk },
                 unsafe { vm.ip.offset_from(unsafe { (*vm.chunk).code }) }) };
+*/
+//> Calls and Functions trace-execution
+            let _ = unsafe { disassembleInstruction(
+                unsafe { &mut (*(*frame).function).chunk } as *mut Chunk,
+                unsafe { (*frame).ip.offset_from(unsafe { (*(*frame).function).chunk.code }) }) };
+//< Calls and Functions trace-execution
         }
 
 //< trace-execution
@@ -297,13 +460,23 @@ unsafe fn run() -> InterpretResult {
 //> Local Variables interpret-get-local
             OP_GET_LOCAL => {
                 let mut slot: u8 = unsafe { READ_BYTE!() };
+/* Local Variables interpret-get-local < Calls and Functions push-local
                 unsafe { push(unsafe { vm.stack[slot as usize].clone() }) }; // [slot]
+*/
+//> Calls and Functions push-local
+                unsafe { push(unsafe { (*(*frame).slots.offset(slot as isize)).clone() }) };
+//< Calls and Functions push-local
             }
 //< Local Variables interpret-get-local
 //> Local Variables interpret-set-local
             OP_SET_LOCAL => {
                 let mut slot: u8 = unsafe { READ_BYTE!() };
+/* Local Variables interpret-set-local < Calls and Functions set-local
                 unsafe { vm.stack[slot as usize] = unsafe { peek(0) } };
+*/
+//> Calls and Functions set-local
+                unsafe { *(*frame).slots.offset(slot as isize) = unsafe { peek(0) } };
+//< Calls and Functions set-local
             }
 //< Local Variables interpret-set-local
 //> Global Variables interpret-get-global
@@ -402,30 +575,70 @@ unsafe fn run() -> InterpretResult {
 //> Jumping Back and Forth op-jump
             OP_JUMP => {
                 let mut offset: u16 = unsafe { READ_SHORT!() };
+/* Jumping Back and Forth op-jump < Calls and Functions jump
                 unsafe { vm.ip = unsafe { vm.ip.offset(offset as isize) } };
+*/
+//> Calls and Functions jump
+                unsafe { (*frame).ip = unsafe { (*frame).ip.offset(offset as isize) } };
+//< Calls and Functions jump
             }
 //< Jumping Back and Forth op-jump
 //> Jumping Back and Forth op-jump-if-false
             OP_JUMP_IF_FALSE => {
                 let mut offset: u16 = unsafe { READ_SHORT!() };
+/* Jumping Back and Forth op-jump-if-false < Calls and Functions jump-if-false
                 if isFalsey(unsafe { peek(0) }) { unsafe { vm.ip = unsafe { vm.ip.offset(offset as isize) } }; }
+*/
+//> Calls and Functions jump-if-false
+                if isFalsey(unsafe { peek(0) }) { unsafe { (*frame).ip = unsafe { (*frame).ip.offset(offset as isize) } }; }
+//< Calls and Functions jump-if-false
             }
 //< Jumping Back and Forth op-jump-if-false
 //> Jumping Back and Forth op-loop
             OP_LOOP => {
                 let mut offset: u16 = unsafe { READ_SHORT!() };
+/* Jumping Back and Forth op-loop < Calls and Functions loop
                 unsafe { vm.ip = unsafe { vm.ip.offset(-(offset as isize)) } };
+*/
+//> Calls and Functions loop
+                unsafe { (*frame).ip = unsafe { (*frame).ip.offset(-(offset as isize)) } };
+//< Calls and Functions loop
             }
 //< Jumping Back and Forth op-loop
+//> Calls and Functions interpret-call
+            OP_CALL => {
+                let mut argCount: isize = unsafe { READ_BYTE!() } as isize;
+                if !unsafe { callValue(unsafe { peek(argCount) }, argCount) } {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+//> update-frame-after-call
+                frame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize - 1] } as *mut CallFrame;
+//< update-frame-after-call
+            }
+//< Calls and Functions interpret-call
             OP_RETURN => {
 /* A Virtual Machine print-return < Global Variables op-return
                 unsafe { printValue(unsafe { pop() }) };
                 print!("\n");
 */
-//> Global Variables op-return
+/* Global Variables op-return < Calls and Functions interpret-return
                 // Exit interpreter.
-//< Global Variables op-return
+*/
+/* A Virtual Machine run < Calls and Functions interpret-return
                 return INTERPRET_OK;
+*/
+//> Calls and Functions interpret-return
+                let mut result: Value = unsafe { pop() };
+                unsafe { vm.frameCount -= 1 };
+                if unsafe { vm.frameCount == 0 } {
+                    let _ = unsafe { pop() };
+                    return INTERPRET_OK;
+                }
+
+                unsafe { vm.stackTop = unsafe { (*frame).slots } };
+                unsafe { push(result) };
+                frame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize - 1] } as *mut CallFrame;
+//< Calls and Functions interpret-return
             }
         };
     }
@@ -461,7 +674,7 @@ pub unsafe fn interpret(mut source: *const u8) -> InterpretResult {
     unsafe { compile(source) };
     return INTERPRET_OK;
 */
-//> Compiling Expressions interpret-chunk
+/* Compiling Expressions interpret-chunk < Calls and Functions interpret-stub
     let mut chunk: Chunk = unsafe { uninit::<Chunk>() };
     unsafe { initChunk(&mut chunk as *mut Chunk) };
 
@@ -472,14 +685,35 @@ pub unsafe fn interpret(mut source: *const u8) -> InterpretResult {
 
     unsafe { vm.chunk = &mut chunk as *mut Chunk };
     unsafe { vm.ip = unsafe { (*vm.chunk).code } };
-//< Compiling Expressions interpret-chunk
+*/
+//> Calls and Functions interpret-stub
+    let mut function: *mut ObjFunction = unsafe { compile(source) };
+    if function.is_null() { return INTERPRET_COMPILE_ERROR; }
+
+    unsafe { push(OBJ_VAL!(function)) };
+//< Calls and Functions interpret-stub
+/* Calls and Functions interpret-stub < Calls and Functions interpret
+    let mut frame: *mut CallFrame = unsafe { &mut vm.frames[unsafe { vm.frameCount } as usize] } as *mut CallFrame;
+    unsafe { vm.frameCount += 1 };
+    unsafe { (*frame).function = function };
+    unsafe { (*frame).ip = unsafe { (*function).chunk.code } };
+    unsafe { (*frame).slots = &mut vm.stack as *mut Value };
+*/
+//> Calls and Functions interpret
+    let _ = unsafe { call(function, 0) };
+//< Calls and Functions interpret
 //< Scanning on Demand vm-interpret-c
 //> Compiling Expressions interpret-chunk
 
+/* Compiling Expressions interpret-chunk < Calls and Functions end-interpret
     let mut result: InterpretResult = unsafe { run() };
 
     unsafe { freeChunk(&mut chunk as *mut Chunk) };
     return result;
+*/
+//> Calls and Functions end-interpret
+    return unsafe { run() };
+//< Calls and Functions end-interpret
 //< Compiling Expressions interpret-chunk
 }
 //< interpret

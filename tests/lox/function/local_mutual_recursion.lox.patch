@@ -1,0 +1,12 @@
+--- a/function/local_mutual_recursion.lox	1970-01-01 00:00:00.000000000 +0000
++++ b/function/local_mutual_recursion.lox	1970-01-01 00:00:00.000000000 +0000
+@@ -10,4 +10,7 @@
+   }
+ 
+   isEven(4);
+-}
+\ No newline at end of file
++}
++// stack trace
++// [line 4] in isEven()
++// [line 12] in script

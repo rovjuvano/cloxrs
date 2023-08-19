@@ -241,3 +241,42 @@ mod jumping_back_and_forth {
     case!(while__var_in_body);
 }
 //< Jumping Back and Forth tests
+//> Calls and Functions tests
+mod calls_and_functions {
+    use super::case;
+    case!(call__bool);
+    case!(call__nil);
+    case!(call__num);
+    case!(call__string);
+    case!(for__return_inside);
+    case!(for__syntax);
+    case!(function__body_must_be_block);
+    case!(function__empty_body);
+    case!(function__extra_arguments);
+    case!(function__local_mutual_recursion);
+    case!(function__missing_arguments);
+    case!(function__missing_comma_in_parameters);
+    case!(function__mutual_recursion);
+    case!(function__nested_call_with_arguments);
+    case!(function__parameters);
+    case!(function__print);
+    case!(function__recursion);
+    case!(function__too_many_arguments);
+    case!(function__too_many_parameters);
+    case!(limit__no_reuse_constants);
+    case!(limit__stack_overflow);
+    case!(limit__too_many_constants);
+    case!(limit__too_many_locals);
+    case!(return__after_else);
+    case!(return__after_if);
+    case!(return__after_while);
+    case!(return__at_top_level);
+    case!(return__in_function);
+    case!(return__return_nil_if_no_value);
+    case!(unexpected_character);
+    case!(variable__collide_with_parameter);
+    case!(variable__duplicate_parameter);
+    case!(variable__early_bound);
+    case!(while__return_inside);
+}
+//< Calls and Functions tests
