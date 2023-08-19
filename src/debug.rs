@@ -50,6 +50,14 @@ fn simpleInstruction(mut name: &str, mut offset: isize) -> isize {
     return offset + 1;
 }
 //< simple-instruction
+//> Local Variables byte-instruction
+unsafe fn byteInstruction(mut name: &str, mut chunk: *mut Chunk,
+        mut offset: isize) -> isize {
+    let mut slot: u8 = unsafe { *(*chunk).code.offset(offset + 1) };
+    print!("{:<16} {:4}\n", name, slot);
+    return offset + 2; // [debug]
+}
+//< Local Variables byte-instruction
 //> disassemble-instruction
 pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -> isize {
     print!("{:04} ", offset);
@@ -80,6 +88,12 @@ pub unsafe fn disassembleInstruction(mut chunk: *mut Chunk, mut offset: isize) -
         OP_POP =>
             simpleInstruction("OP_POP", offset),
 //< Global Variables disassemble-pop
+//> Local Variables disassemble-local
+        OP_GET_LOCAL =>
+            unsafe { byteInstruction("OP_GET_LOCAL", chunk, offset) },
+        OP_SET_LOCAL =>
+            unsafe { byteInstruction("OP_SET_LOCAL", chunk, offset) },
+//< Local Variables disassemble-local
 //> Global Variables disassemble-get-global
         OP_GET_GLOBAL =>
             unsafe { constantInstruction("OP_GET_GLOBAL", chunk, offset) },

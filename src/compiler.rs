@@ -1,4 +1,7 @@
 //> Scanning on Demand compiler-c
+//> Local Variables declare-variable
+use ::core::iter::*;
+//< Local Variables declare-variable
 //> Compiling Expressions binary
 use ::core::mem::*;
 //< Compiling Expressions binary
@@ -9,6 +12,9 @@ use ::std::*;
 //> Compiling Expressions compiler-include-stdlib
 // no need for additional includes here
 //< Compiling Expressions compiler-include-stdlib
+//> Local Variables compiler-include-string
+// no need for additional includes here
+//< Local Variables compiler-include-string
 
 use crate::common::*;
 //> Scanning on Demand compiler-h
@@ -99,9 +105,29 @@ struct ParseRule {
     pub precedence: Precedence,
 }
 //< parse-rule
+//> Local Variables local-struct
+
+#[derive(Clone)] // Copy too but made explicit
+struct Local {
+    pub name: Token,
+    pub depth: isize,
+}
+//< Local Variables local-struct
+//> Local Variables compiler-struct
+
+#[derive(Clone)] // Copy too but made explicit
+struct Compiler {
+    pub locals: [Local; UINT8_COUNT as usize],
+    pub localCount: isize,
+    pub scopeDepth: isize,
+}
+//< Local Variables compiler-struct
 
 static mut parser: Parser = unsafe { uninit_static!(Parser) };
 //< Compiling Expressions parser
+//> Local Variables current-compiler
+static mut current: *mut Compiler = null_mut();
+//< Local Variables current-compiler
 //> Compiling Expressions compiling-chunk
 static mut compilingChunk: *mut Chunk = null_mut();
 
@@ -209,6 +235,13 @@ unsafe fn emitConstant(mut value: Value) {
     unsafe { emitBytes(OP_CONSTANT as u8, unsafe { makeConstant(value) }) };
 }
 //< Compiling Expressions emit-constant
+//> Local Variables init-compiler
+unsafe fn initCompiler(mut compiler: *mut Compiler) {
+    unsafe { (*compiler).localCount = 0 };
+    unsafe { (*compiler).scopeDepth = 0 };
+    unsafe { current = compiler };
+}
+//< Local Variables init-compiler
 //> Compiling Expressions end-compiler
 unsafe fn endCompiler() {
     unsafe { emitReturn() };
@@ -220,6 +253,25 @@ unsafe fn endCompiler() {
 //< dump-chunk
 }
 //< Compiling Expressions end-compiler
+//> Local Variables begin-scope
+unsafe fn beginScope() {
+    unsafe { (*current).scopeDepth += 1 };
+}
+//< Local Variables begin-scope
+//> Local Variables end-scope
+unsafe fn endScope() {
+    unsafe { (*current).scopeDepth -= 1 };
+//> pop-locals
+
+    while unsafe { (*current).localCount } > 0 &&
+        unsafe { (*current).locals[unsafe { (*current).localCount } as usize - 1].depth } >
+            unsafe { (*current).scopeDepth } {
+        unsafe { emitByte(OP_POP as u8) };
+        unsafe { (*current).localCount -= 1 };
+    }
+//< pop-locals
+}
+//< Local Variables end-scope
 //> Compiling Expressions forward-declarations
 
 // no need to forward declare expression
@@ -237,14 +289,99 @@ unsafe fn identifierConstant(mut name: *mut Token) -> u8 {
         unsafe { (*name).start }, unsafe { (*name).length }) })) };
 }
 //< Global Variables identifier-constant
+//> Local Variables identifiers-equal
+unsafe fn identifiersEqual(mut a: *mut Token, mut b: *mut Token) -> bool {
+    if unsafe { (*a).length } != unsafe { (*b).length } { return false; }
+    return unsafe { memcmp(unsafe { (*a).start }, unsafe { (*b).start }, unsafe { (*a).length } as usize) } == 0;
+}
+//< Local Variables identifiers-equal
+//> Local Variables resolve-local
+unsafe fn resolveLocal(mut compiler: *mut Compiler, mut name: *mut Token) -> isize {
+    for mut i in (0..unsafe { (*compiler).localCount }).rev() {
+        let mut local: *mut Local = unsafe { &mut (*compiler).locals[i as usize] } as *mut Local;
+        if unsafe { identifiersEqual(name, unsafe { &mut (*local).name } as *mut Token) } {
+//> own-initializer-error
+            if unsafe { (*local).depth } == -1 {
+                unsafe { error("Can't read local variable in its own initializer.") };
+            }
+//< own-initializer-error
+            return i as isize;
+        }
+    }
+
+    return -1;
+}
+//< Local Variables resolve-local
+//> Local Variables add-local
+unsafe fn addLocal(mut name: Token) {
+//> too-many-locals
+    if unsafe { (*current).localCount } == UINT8_COUNT {
+        unsafe { error("Too many local variables in function.") };
+        return;
+    }
+
+//< too-many-locals
+    let mut local: *mut Local = unsafe { &mut (*current).locals[unsafe { (*current).localCount } as usize] } as *mut Local;
+    unsafe { (*current).localCount += 1 };
+    unsafe { (*local).name = name.clone() };
+/* Local Variables add-local < Local Variables declare-undefined
+    unsafe { (*local).depth = unsafe { (*current).scopeDepth } };
+*/
+//> declare-undefined
+    unsafe { (*local).depth = -1 };
+//< declare-undefined
+}
+//< Local Variables add-local
+//> Local Variables declare-variable
+unsafe fn declareVariable() {
+    if unsafe { (*current).scopeDepth } == 0 { return; }
+
+    let mut name: *mut Token = unsafe { &mut parser.previous } as *mut Token;
+//> existing-in-scope
+    for mut i in (0..unsafe { (*current).localCount }).rev() {
+        let mut local: *mut Local = unsafe { &mut (*current).locals[i as usize] } as *mut Local;
+        if unsafe { (*local).depth } != -1 && unsafe { (*local).depth } < unsafe { (*current).scopeDepth } {
+            break; // [negative]
+        }
+
+        if unsafe { identifiersEqual(name, unsafe { &mut (*local).name } as *mut Token) } {
+            unsafe { error("Already a variable with this name in this scope.") };
+        }
+    }
+
+//< existing-in-scope
+    unsafe { addLocal(unsafe { (*name).clone() }) };
+}
+//< Local Variables declare-variable
 //> Global Variables parse-variable
 unsafe fn parseVariable(mut errorMessage: &str) -> u8 {
     unsafe { consume(TOKEN_IDENTIFIER, errorMessage) };
+//> Local Variables parse-local
+
+    unsafe { declareVariable() };
+    if unsafe { (*current).scopeDepth } > 0 { return 0; }
+
+//< Local Variables parse-local
     return unsafe { identifierConstant(unsafe { &mut parser.previous } as *mut Token) };
 }
 //< Global Variables parse-variable
+//> Local Variables mark-initialized
+unsafe fn markInitialized() {
+    unsafe { (*current).locals[unsafe { (*current).localCount } as usize - 1].depth =
+        unsafe { (*current).scopeDepth } };
+}
+//< Local Variables mark-initialized
 //> Global Variables define-variable
 unsafe fn defineVariable(mut global: u8) {
+//> Local Variables define-variable
+    if unsafe { (*current).scopeDepth > 0 } {
+//> define-local
+        unsafe { markInitialized() };
+//< define-local
+        return;
+    }
+
+//< Local Variables define-variable
     unsafe { emitBytes(OP_DEFINE_GLOBAL as u8, global) };
 }
 //< Global Variables define-variable
@@ -335,8 +472,23 @@ unsafe fn namedVariable(mut name: Token) {
 //> Global Variables named-variable-signature
 unsafe fn namedVariable(mut name: Token, mut canAssign: bool) {
 //< Global Variables named-variable-signature
-//> Global Variables read-named-variable
+/* Global Variables read-named-variable < Local Variables named-local
     let mut arg: u8 = unsafe { identifierConstant(&mut name as *mut Token) };
+*/
+//> Global Variables read-named-variable
+//> Local Variables named-local
+    #[allow(unused_assignments)]
+    let (mut getOp, mut setOp): (OpCode, OpCode) = unsafe { uninit::<(OpCode, OpCode)>() };
+    let mut arg: isize = unsafe { resolveLocal(unsafe { current }, &mut name as *mut Token) };
+    if arg != -1 {
+        getOp = OP_GET_LOCAL;
+        setOp = OP_SET_LOCAL;
+    } else {
+        arg = unsafe { identifierConstant(&mut name as *mut Token) } as isize;
+        getOp = OP_GET_GLOBAL;
+        setOp = OP_SET_GLOBAL;
+    }
+//< Local Variables named-local
 /* Global Variables read-named-variable < Global Variables named-variable
     unsafe { emitBytes(OP_GET_GLOBAL as u8, arg) };
 */
@@ -349,9 +501,19 @@ unsafe fn namedVariable(mut name: Token, mut canAssign: bool) {
     if canAssign && unsafe { r#match(TOKEN_EQUAL) } {
 //< named-variable-can-assign
         unsafe { expression() };
+/* Global Variables named-variable < Local Variables emit-set
         unsafe { emitBytes(OP_SET_GLOBAL as u8, arg) };
+*/
+//> Local Variables emit-set
+        unsafe { emitBytes(setOp as u8, arg as u8) };
+//< Local Variables emit-set
     } else {
+/* Global Variables named-variable < Local Variables emit-get
         unsafe { emitBytes(OP_GET_GLOBAL as u8, arg) };
+*/
+//> Local Variables emit-get
+        unsafe { emitBytes(getOp as u8, arg as u8) };
+//< Local Variables emit-get
     }
 //< named-variable
 }
@@ -561,6 +723,15 @@ unsafe fn expression() {
 //< expression-body
 }
 //< Compiling Expressions expression
+//> Local Variables block
+unsafe fn block() {
+    while !unsafe { check(TOKEN_RIGHT_BRACE) } && !unsafe { check(TOKEN_EOF) } {
+        unsafe { declaration() };
+    }
+
+    unsafe { consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.") };
+}
+//< Local Variables block
 //> Global Variables var-declaration
 unsafe fn varDeclaration() {
     let mut global: u8 = unsafe { parseVariable("Expect variable name.") };
@@ -636,6 +807,12 @@ unsafe fn declaration() {
 unsafe fn statement() {
     if unsafe { r#match(TOKEN_PRINT) } {
         unsafe { printStatement() };
+//> Local Variables parse-block
+    } else if unsafe { r#match(TOKEN_LEFT_BRACE) } {
+        unsafe { beginScope() };
+        unsafe { block() };
+        unsafe { endScope() };
+//< Local Variables parse-block
 //> parse-expressions-statement
     } else {
         unsafe { expressionStatement() };
@@ -667,6 +844,10 @@ pub unsafe fn compile(mut source: *const u8, mut chunk: *mut Chunk) -> bool {
         if token.r#type.clone() as u8 == TOKEN_EOF as u8 { break; }
     }
 */
+//> Local Variables compiler
+    let mut compiler: *mut Compiler = unsafe { &mut uninit::<Compiler>() } as *mut Compiler;
+    unsafe { initCompiler(compiler) };
+//< Local Variables compiler
 //> Compiling Expressions init-compile-chunk
     unsafe { compilingChunk = chunk };
 //< Compiling Expressions init-compile-chunk

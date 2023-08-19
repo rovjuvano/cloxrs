@@ -192,3 +192,19 @@ mod global_variables {
     case!(variable__use_this_as_var);
 }
 //< Global Variables tests
+//> Local Variables tests
+mod local_variables {
+    use super::case;
+    case!(assignment__local);
+    case!(block__scope);
+    case!(variable__duplicate_local);
+    case!(variable__in_middle_of_block);
+    case!(variable__in_nested_block);
+    case!(variable__scope_reuse_in_different_blocks);
+    case!(variable__shadow_and_local);
+    case!(variable__shadow_global);
+    case!(variable__shadow_local);
+    case!(variable__undefined_local);
+    case!(variable__use_local_in_initializer);
+}
+//< Local Variables tests

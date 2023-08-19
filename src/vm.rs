@@ -285,6 +285,18 @@ unsafe fn run() -> InterpretResult {
 //> Global Variables interpret-pop
             OP_POP => { let _ = unsafe { pop() }; }
 //< Global Variables interpret-pop
+//> Local Variables interpret-get-local
+            OP_GET_LOCAL => {
+                let mut slot: u8 = unsafe { READ_BYTE!() };
+                unsafe { push(unsafe { vm.stack[slot as usize].clone() }) }; // [slot]
+            }
+//< Local Variables interpret-get-local
+//> Local Variables interpret-set-local
+            OP_SET_LOCAL => {
+                let mut slot: u8 = unsafe { READ_BYTE!() };
+                unsafe { vm.stack[slot as usize] = unsafe { peek(0) } };
+            }
+//< Local Variables interpret-set-local
 //> Global Variables interpret-get-global
             OP_GET_GLOBAL => {
                 let mut name: *mut ObjString = unsafe { READ_STRING!() };

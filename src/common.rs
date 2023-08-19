@@ -10,6 +10,10 @@ use ::core::mem::MaybeUninit;
 //< Compiling Expressions define-debug-print-code
 // rustflags = "--cfg DEBUG_TRACE_EXECUTION"
 //< A Virtual Machine define-debug-trace
+//> Local Variables uint8-count
+
+pub const UINT8_COUNT: isize = u8::MAX as isize + 1;
+//< Local Variables uint8-count
 
 //> Scanning on Demand run-file
 pub(crate) use ::core::ffi::c_char;
